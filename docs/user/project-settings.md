@@ -47,6 +47,30 @@ Select the project and open Project to choose an icon, emoji, or image. The choi
 every checkout in the project group and appears on connected clients. Choose **Automatic** to let
 T3 Code detect an icon again.
 
+## Link tasks and tickets from thread titles
+
+In **Settings → General → Thread links**, configure a name, a title pattern, and a link template.
+Choose **All projects** to set defaults, or select a project to customize its rules. Rules are saved
+on the selected machines and apply to existing and new threads on web, desktop, and mobile.
+Configure rules from web or desktop settings.
+
+Thread links use the same inheritance controls as other project settings. Saving with
+**All projects** selected changes environment defaults and preserves project overrides.
+To apply one set of rules everywhere, select **All environments** and **All projects**, save
+the defaults, then open the thread-link inheritance control and choose **Reset all** to clear
+the listed project overrides. Only connected environments are updated; configure offline
+environments when they reconnect. Existing rules migrate automatically when the server updates.
+
+For example, the pattern `#(\d+)` with the template
+`https://github.com/owner/repo/issues/{1}` links `#123` in a thread title to issue 123.
+Use `{match}` for the whole match or `{1}`, `{2}`, and so on for capture groups. Enter the regular
+expression without `/` delimiters or flags. Matched values are URL-encoded. Use the sample-title
+preview to check the resulting link before saving.
+
+Rules are checked in order; the first matching rule supplies one link. To disable links for a
+project, select it and save an empty list. Reset its thread-link override to inherit each
+environment’s defaults again.
+
 ## Keep the default branch current
 
 In Source Control, enable **Automatically pull** to keep the default-branch checkout up to date
