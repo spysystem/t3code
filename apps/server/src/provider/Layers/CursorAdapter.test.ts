@@ -204,10 +204,13 @@ cursorAdapterTestLayer("CursorAdapterLive", (it) => {
       const settings = yield* ServerSettingsService;
       const threadId = ThreadId.make("cursor-mock-thread");
 
-      const wrapperPath = yield* Effect.promise(() => makeMockAgentWrapper());
+      const wrapperPath = yield* Effect.promise(() =>
+        makeMockAgentWrapper({ T3_ACP_PROMPT_THOUGHT_TEXT: "Consider the options." }),
+      );
       yield* settings.updateSettings({ providers: { cursor: { binaryPath: wrapperPath } } });
 
-      const runtimeEventsFiber = yield* Stream.take(adapter.streamEvents, 9).pipe(
+      const runtimeEventsFiber = yield* adapter.streamEvents.pipe(
+        Stream.takeUntil((event) => event.type === "turn.completed"),
         Stream.runCollect,
         Effect.forkChild,
       );
@@ -254,7 +257,15 @@ cursorAdapterTestLayer("CursorAdapterLive", (it) => {
       );
       assert.isDefined(assistantStarted);
 
-      const delta = runtimeEvents.find((e) => e.type === "content.delta");
+      const thought = runtimeEvents.find(
+        (event) => event.type === "content.delta" && event.payload.streamKind === "reasoning_text",
+      );
+      assert.isDefined(thought);
+      if (thought?.type === "content.delta")
+        assert.equal(thought.payload.delta, "Consider the options.");
+      const delta = runtimeEvents.find(
+        (e) => e.type === "content.delta" && e.payload.streamKind === "assistant_text",
+      );
       assert.isDefined(delta);
       if (delta?.type === "content.delta") {
         assert.equal(delta.payload.delta, "hello from mock");

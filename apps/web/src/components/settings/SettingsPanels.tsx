@@ -545,6 +545,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       ...(settings.showSkillsInSlashMenu !== DEFAULT_UNIFIED_SETTINGS.showSkillsInSlashMenu
         ? ["Show skills in slash menu"]
         : []),
+      ...(settings.showThinking !== DEFAULT_UNIFIED_SETTINGS.showThinking ? ["Show thinking"] : []),
       ...(settings.filesShowIgnored !== DEFAULT_UNIFIED_SETTINGS.filesShowIgnored
         ? ["Show ignored files"]
         : []),
@@ -636,6 +637,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       settings.sidebarProjectGroupingMode,
       settings.sidebarThreadPreviewCount,
       settings.showSkillsInSlashMenu,
+      settings.showThinking,
       settings.filesShowIgnored,
       settings.timestampFormat,
       settings.wordWrap,
@@ -716,6 +718,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       diffLayout: DEFAULT_UNIFIED_SETTINGS.diffLayout,
       proactivePanelsEnabled: DEFAULT_UNIFIED_SETTINGS.proactivePanelsEnabled,
       showSkillsInSlashMenu: DEFAULT_UNIFIED_SETTINGS.showSkillsInSlashMenu,
+      showThinking: DEFAULT_UNIFIED_SETTINGS.showThinking,
       filesShowIgnored: DEFAULT_UNIFIED_SETTINGS.filesShowIgnored,
       composerCollapseOnScroll: DEFAULT_UNIFIED_SETTINGS.composerCollapseOnScroll,
       contextWindowMeterEnabled: DEFAULT_UNIFIED_SETTINGS.contextWindowMeterEnabled,
@@ -2395,6 +2398,28 @@ export function GeneralSettingsPanel() {
                 updateSettings({ showSkillsInSlashMenu: Boolean(checked) })
               }
               aria-label="Show skills in slash menu"
+            />
+          }
+        />
+
+        <SettingsRow
+          {...searchableSetting("show-thinking")}
+          description="Show live thinking and collapsible Thought entries when the provider shares them. This does not change the provider's reasoning level."
+          resetAction={
+            settings.showThinking !== DEFAULT_UNIFIED_SETTINGS.showThinking ? (
+              <SettingResetButton
+                label="show thinking"
+                onClick={() =>
+                  updateSettings({ showThinking: DEFAULT_UNIFIED_SETTINGS.showThinking })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Switch
+              checked={settings.showThinking}
+              onCheckedChange={(checked) => updateSettings({ showThinking: Boolean(checked) })}
+              aria-label="Show thinking"
             />
           }
         />
