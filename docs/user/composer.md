@@ -67,6 +67,18 @@ returns to the remembered selection.
 
 Leaving reasoning level or service tier unset uses the provider's own configuration.
 
+## Review thinking
+
+On web and desktop, enable **Settings → General → Show thinking** to see live
+thinking and saved **Thought** entries. This is off by default and does not change
+the provider's reasoning level. Turning it off hides the entries; enabling it
+again reveals the saved history.
+
+When enabled and a provider shares thinking text or a reasoning summary, T3 Code shows it live
+and saves it with the conversation. Expand a completed **Thought** entry to read
+it again. If the provider reports thinking without readable text, the entry records
+that the phase occurred.
+
 ## Quote an assistant response
 
 On web and desktop, select text within one assistant response and choose

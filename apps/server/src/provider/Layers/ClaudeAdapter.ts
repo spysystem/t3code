@@ -266,6 +266,7 @@ interface ClaudeTurnState {
   readonly synthetic?: boolean;
   readonly items: Array<unknown>;
   readonly assistantTextBlocks: Map<number, AssistantTextBlockState>;
+  readonly reasoningBlocks: Map<number, string>;
   readonly assistantTextBlockOrder: Array<AssistantTextBlockState>;
   readonly capturedProposedPlanKeys: Set<string>;
   latestAssistantUsage: unknown | undefined;
@@ -2858,6 +2859,10 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
                 itemId: asRuntimeItemId(assistantBlockEntry.block.itemId),
               }
             : {}),
+          ...(event.delta.type === "thinking_delta" &&
+          context.turnState.reasoningBlocks.has(event.index)
+            ? { itemId: asRuntimeItemId(context.turnState.reasoningBlocks.get(event.index)!) }
+            : {}),
           payload: {
             streamKind,
             delta: deltaText,
@@ -2977,6 +2982,21 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
 
     if (event.type === "content_block_start") {
       const { index, content_block: block } = event;
+      if ((block.type === "thinking" || block.type === "redacted_thinking") && context.turnState) {
+        const stamp = yield* makeEventStamp();
+        const itemId = `claude-reasoning:${stamp.eventId}`;
+        context.turnState.reasoningBlocks.set(index, itemId);
+        yield* offerRuntimeEvent({
+          ...stamp,
+          type: "item.started",
+          provider: PROVIDER,
+          threadId: context.session.threadId,
+          turnId: context.turnState.turnId,
+          itemId: asRuntimeItemId(itemId),
+          payload: { itemType: "reasoning" },
+        });
+        return;
+      }
       if (block.type === "text") {
         yield* ensureAssistantTextBlock(context, index, {
           fallbackText: extractContentBlockText(block),
@@ -3059,6 +3079,22 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
 
     if (event.type === "content_block_stop") {
       const { index } = event;
+      const reasoningItemId = !streamParentToolUseId
+        ? context.turnState?.reasoningBlocks.get(index)
+        : undefined;
+      if (reasoningItemId && context.turnState) {
+        context.turnState.reasoningBlocks.delete(index);
+        yield* offerRuntimeEvent({
+          ...(yield* makeEventStamp()),
+          type: "item.completed",
+          provider: PROVIDER,
+          threadId: context.session.threadId,
+          turnId: context.turnState.turnId,
+          itemId: asRuntimeItemId(reasoningItemId),
+          payload: { itemType: "reasoning" },
+        });
+        return;
+      }
       const assistantBlock = context.turnState?.assistantTextBlocks.get(index);
       if (assistantBlock) {
         assistantBlock.streamClosed = true;
@@ -3288,6 +3324,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         synthetic: true,
         items: [],
         assistantTextBlocks: new Map(),
+        reasoningBlocks: new Map(),
         assistantTextBlockOrder: [],
         capturedProposedPlanKeys: new Set(),
         latestAssistantUsage: undefined,
@@ -4739,8 +4776,12 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
       const {
         "permission-mode": launchArgPermissionMode,
         "dangerously-skip-permissions": launchArgSkipPermissions,
-        ...extraArgs
+        ...launchArgs
       } = parseCliArgs(claudeSettings.launchArgs).flags;
+      const extraArgs = {
+        "thinking-display": "summarized",
+        ...launchArgs,
+      };
       const selectedModel =
         input.modelSelection?.instanceId === boundInstanceId ? input.modelSelection : undefined;
       const modelSelection = selectedModel
@@ -5095,6 +5136,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         startedAt: yield* nowIso,
         items: [],
         assistantTextBlocks: new Map(),
+        reasoningBlocks: new Map(),
         assistantTextBlockOrder: [],
         capturedProposedPlanKeys: new Set(),
         latestAssistantUsage: undefined,

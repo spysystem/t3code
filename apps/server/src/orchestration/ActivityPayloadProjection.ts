@@ -645,16 +645,41 @@ function dropSupersededToolUpdatedActivities(
 
 export function projectThreadDetailSnapshot(
   snapshot: OrchestrationThreadDetailSnapshot,
+  includeReasoning = false,
 ): OrchestrationThreadDetailSnapshot {
   return {
     ...snapshot,
     thread: {
       ...snapshot.thread,
+      messages: includeReasoning
+        ? snapshot.thread.messages
+        : snapshot.thread.messages.filter((message) => message.role !== "reasoning"),
       activities: dropSupersededToolUpdatedActivities(
         dropStaleContextWindowActivities(snapshot.thread.activities),
       ).map(projectActivityPayload),
     },
   };
+}
+
+export function projectThreadReasoningEvent(
+  event: OrchestrationEvent,
+  includeReasoning = false,
+): OrchestrationEvent {
+  if (
+    !includeReasoning &&
+    event.type === "thread.message-sent" &&
+    event.payload.role === "reasoning"
+  ) {
+    // Older clients cannot decode the new role. Deliver only the thread's
+    // timestamp update, preserving the sequence so replay and page watermarks
+    // still advance even when the omitted reasoning is the latest event.
+    return {
+      ...event,
+      type: "thread.meta-updated",
+      payload: { threadId: event.payload.threadId, updatedAt: event.payload.updatedAt },
+    };
+  }
+  return event;
 }
 
 export function projectActivityEvent(event: OrchestrationEvent): OrchestrationEvent {

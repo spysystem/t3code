@@ -877,6 +877,19 @@ export function makeCursorAdapter(
                       }),
                     );
                     return;
+                  case "ThoughtDelta":
+                    yield* offerRuntimeEvent(
+                      makeAcpContentDeltaEvent({
+                        stamp: yield* makeEventStamp(),
+                        provider: PROVIDER,
+                        threadId: ctx.threadId,
+                        turnId: ctx.activeTurnId,
+                        streamKind: "reasoning_text",
+                        text: event.text,
+                        rawPayload: event.rawPayload,
+                      }),
+                    );
+                    return;
                   case "ContentDelta":
                     ctx.assistantReply.push(event.text);
                     yield* logNative(
