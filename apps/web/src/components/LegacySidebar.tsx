@@ -1,6 +1,7 @@
 import { useSupportsMultiplePullRequests } from "~/hooks/useSupportsMultiplePullRequests";
 import { GitPullRequestIcon } from "lucide-react";
 import { resolveThreadCurrentPullRequestLink } from "@t3tools/shared/threadPullRequests";
+import { ThreadLink } from "./ThreadLink";
 import { Spinner } from "~/components/ui/spinner";
 import {
   ArchiveIcon,
@@ -760,6 +761,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
               <GitPullRequestIcon className="size-3" />
             </a>
           ) : null}
+          <ThreadLink thread={thread} />
           {threadStatus && <ThreadStatusLabel status={threadStatus} />}
           {renamingThreadKey === threadKey ? (
             <input
