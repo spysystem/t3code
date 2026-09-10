@@ -144,7 +144,7 @@ it.layer(TestLayer, { excludeTestServices: true })("WorkspaceFileSystemLive", (i
     );
 
     it.effect.skipIf(!symlinksSupported)(
-      "rejects symlinks that resolve outside the workspace root",
+      "follows symlinks that resolve outside the workspace root",
       () =>
         Effect.gen(function* () {
           const workspaceFileSystem = yield* WorkspaceFileSystem.WorkspaceFileSystem;
@@ -152,26 +152,14 @@ it.layer(TestLayer, { excludeTestServices: true })("WorkspaceFileSystemLive", (i
           const path = yield* Path.Path;
           const cwd = yield* makeTempDir;
           const outsideDir = yield* makeTempDir;
-          yield* writeTextFile(outsideDir, "secret.txt", "outside\n");
-          yield* fileSystem.symlink(
-            path.join(outsideDir, "secret.txt"),
-            path.join(cwd, "linked-secret.txt"),
-          );
+          yield* writeTextFile(outsideDir, "notes/plan.md", "# plan\n");
+          yield* fileSystem.symlink(path.join(outsideDir, "notes"), path.join(cwd, "ai"));
 
-          const error = yield* workspaceFileSystem
-            .readFile({ cwd, relativePath: "linked-secret.txt" })
-            .pipe(Effect.flip);
-          const resolvedWorkspaceRoot = yield* fileSystem.realPath(cwd);
-          const resolvedPath = yield* fileSystem.realPath(path.join(outsideDir, "secret.txt"));
+          const listing = yield* workspaceFileSystem.listDirectory({ cwd, relativePath: "ai" });
+          const file = yield* workspaceFileSystem.readFile({ cwd, relativePath: "ai/plan.md" });
 
-          expect(error).toBeInstanceOf(WorkspaceFileSystem.WorkspaceFilePathEscapeError);
-          expect(error).toMatchObject({
-            workspaceRoot: cwd,
-            relativePath: "linked-secret.txt",
-            resolvedWorkspaceRoot,
-            resolvedPath,
-          });
-          expect("cause" in error).toBe(false);
+          expect(listing.entries).toEqual([{ path: "ai/plan.md", kind: "file" }]);
+          expect(file).toMatchObject({ relativePath: "ai/plan.md", contents: "# plan\n" });
         }),
     );
 
@@ -244,6 +232,59 @@ it.layer(TestLayer, { excludeTestServices: true })("WorkspaceFileSystemLive", (i
         });
         expect(error.cause).toBeInstanceOf(Error);
         expect((error.cause as NodeJS.ErrnoException).code).toBe("ENOENT");
+      }),
+    );
+  });
+
+  describe("listDirectory", () => {
+    it.effect("lists one directory level and hides .git", () =>
+      Effect.gen(function* () {
+        const workspaceFileSystem = yield* WorkspaceFileSystem.WorkspaceFileSystem;
+        const cwd = yield* makeTempDir;
+        yield* writeTextFile(cwd, "notes/spec.md", "# spec\n");
+        yield* writeTextFile(cwd, "notes/drafts/a.md", "");
+        yield* writeTextFile(cwd, "notes/drafts/b.md", "");
+        yield* writeTextFile(cwd, "notes/.git/HEAD", "");
+
+        const result = yield* workspaceFileSystem.listDirectory({ cwd, relativePath: "notes" });
+
+        expect(result).toEqual({
+          entries: [
+            { path: "notes/drafts", kind: "directory" },
+            { path: "notes/spec.md", kind: "file" },
+          ],
+          truncated: false,
+        });
+      }),
+    );
+
+    it.effect("rejects directories outside the workspace root", () =>
+      Effect.gen(function* () {
+        const workspaceFileSystem = yield* WorkspaceFileSystem.WorkspaceFileSystem;
+        const cwd = yield* makeTempDir;
+
+        const error = yield* workspaceFileSystem
+          .listDirectory({ cwd, relativePath: "../outside" })
+          .pipe(Effect.flip);
+
+        expect(error.message).toContain(
+          "Workspace file path must be relative to the project root: ../outside",
+        );
+      }),
+    );
+
+    it.effect("rejects files with a typed error", () =>
+      Effect.gen(function* () {
+        const workspaceFileSystem = yield* WorkspaceFileSystem.WorkspaceFileSystem;
+        const cwd = yield* makeTempDir;
+        yield* writeTextFile(cwd, "README.md", "hi\n");
+
+        const error = yield* workspaceFileSystem
+          .listDirectory({ cwd, relativePath: "README.md" })
+          .pipe(Effect.flip);
+
+        expect(error).toBeInstanceOf(WorkspaceFileSystem.WorkspacePathNotDirectoryError);
+        expect("cause" in error).toBe(false);
       }),
     );
   });

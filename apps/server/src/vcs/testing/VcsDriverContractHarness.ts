@@ -164,6 +164,29 @@ export function runVcsDriverContractSuite<R, E>(input: VcsDriverContractSuiteInp
           assert.deepStrictEqual(yield* driver.filterIgnoredPaths(cwd, []), []);
         }),
       );
+
+      it.effect("enumerates ignored entries with ignored directories collapsed", () =>
+        Effect.gen(function* () {
+          const cwd = yield* makeTmpDir();
+          const driver = yield* VcsDriver.VcsDriver;
+          if (!driver.listIgnoredEntries) return;
+
+          yield* input.fixture.createRepo(cwd);
+          yield* input.fixture.ignorePath(cwd, "*.log\nbuild/");
+          yield* input.fixture.writeFile(cwd, "keep.ts", "export const keep = true;\n");
+          yield* input.fixture.writeFile(cwd, "debug.log", "ignore me\n");
+          yield* input.fixture.writeFile(cwd, "build/out.js", "");
+          yield* input.fixture.writeFile(cwd, "build/nested/deep.js", "");
+
+          const result = yield* driver.listIgnoredEntries(cwd);
+
+          assert.deepInclude(result.entries, { path: "debug.log", kind: "file" });
+          assert.deepInclude(result.entries, { path: "build", kind: "directory" });
+          assert.isFalse(result.entries.some((entry) => entry.path.startsWith("build/")));
+          assert.isFalse(result.entries.some((entry) => entry.path === "keep.ts"));
+          assert.equal(result.truncated, false);
+        }),
+      );
     });
   });
 }

@@ -5,6 +5,7 @@ import type {
   VcsDriverCapabilities,
   VcsError,
   VcsInitInput,
+  VcsListIgnoredEntriesResult,
   VcsListRemotesResult,
   VcsListWorkspaceFilesResult,
   ReviewDiffPreviewInput,
@@ -73,6 +74,14 @@ export class VcsDriver extends Context.Service<
       cwd: string,
       relativePaths: ReadonlyArray<string>,
     ) => Effect.Effect<ReadonlyArray<string>, VcsError>;
+    /**
+     * Enumerates ignored paths with fully ignored directories collapsed. Drivers
+     * without a cheap native enumeration leave this undefined; callers then
+     * simply show no ignored entries.
+     */
+    readonly listIgnoredEntries?: (
+      cwd: string,
+    ) => Effect.Effect<VcsListIgnoredEntriesResult, VcsError>;
     readonly initRepository: (input: VcsInitInput) => Effect.Effect<void, VcsError>;
     readonly getDiffPreview?: (
       input: ReviewDiffPreviewInput,
