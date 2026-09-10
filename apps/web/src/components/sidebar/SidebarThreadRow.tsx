@@ -6,6 +6,7 @@ import { discardComposerDraft } from "../../lib/discardComposerDraft";
 import { formatWorktreePathForDisplay } from "../../worktreeCleanup";
 import { contextMenuSourceOf } from "../../contextMenuSource";
 import { requestCustomSnooze } from "../CustomSnoozeDialog";
+import { ThreadLink } from "../ThreadLink";
 import { useSupportsMultiplePullRequests } from "~/hooks/useSupportsMultiplePullRequests";
 import { useDeadlinePassed } from "~/hooks/useDeadline";
 import { resolveThreadCurrentPullRequestLink } from "@t3tools/client-runtime/thread-pull-requests";
@@ -1298,6 +1299,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
       {terminalStatusIcon}
       {prBadge}
       {issueBadge}
+      <ThreadLink thread={thread} />
       {diff ? (
         <span className="shrink-0 font-mono">
           <span className="text-diff-addition-foreground">+{formatDiffCount(diff.insertions)}</span>{" "}
@@ -1395,6 +1397,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                   <T>Regenerating title</T>
                 </span>
               ) : null}
+              {multiline ? null : <ThreadLink thread={thread} />}
               {sortable?.isDragging ? (
                 dragDestination
               ) : (
