@@ -891,6 +891,16 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         command,
         threadId: command.threadId,
       });
+      if (
+        command.title !== undefined &&
+        command.expectedTitle !== undefined &&
+        thread.title !== command.expectedTitle
+      ) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: "The thread title changed before the automatic rename could be applied.",
+        });
+      }
       // Old clients only see the derived single link. Unlink that request through
       // the same command path as modern clients, including stack dismissal, while
       // retaining other links they cannot see. Historical metadata events still replay unchanged.

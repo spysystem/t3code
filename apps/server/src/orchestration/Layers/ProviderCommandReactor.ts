@@ -1071,12 +1071,15 @@ const make = Effect.gen(function* () {
           return;
         }
 
-        yield* orchestrationEngine.dispatch({
-          type: "thread.meta.update",
-          commandId: yield* serverCommandId("thread-title-rename"),
-          threadId: input.threadId,
-          title: generated.title,
-        });
+        yield* orchestrationEngine
+          .dispatch({
+            type: "thread.meta.update",
+            commandId: yield* serverCommandId("thread-title-rename"),
+            threadId: input.threadId,
+            title: generated.title,
+            expectedTitle: thread.title,
+          })
+          .pipe(Effect.catchTag("OrchestrationCommandInvariantError", () => Effect.void));
       }).pipe(
         Effect.catchCause((cause) =>
           Effect.logWarning("provider command reactor failed to generate or rename thread title", {
