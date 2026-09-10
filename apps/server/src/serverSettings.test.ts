@@ -241,6 +241,38 @@ it.layer(NodeServices.layer)("server settings", (it) => {
     ).pipe(TestClock.withLive, Effect.provide(layerServerSettings())),
   );
 
+  it.effect("persists and broadcasts thread link rules and resets project inheritance", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const serverConfig = yield* ServerConfig.ServerConfig;
+        const fileSystem = yield* FileSystem.FileSystem;
+        const serverSettings = yield* ServerSettingsModule.ServerSettingsService;
+        const projectId = ProjectId.make("thread-links-project");
+        const rules = [
+          { name: "Issue", pattern: "#(\\d+)", urlTemplate: "https://tracker.example/{1}" },
+        ];
+        const changes = yield* serverSettings.subscribeChanges;
+        yield* serverSettings.updateSettings({
+          defaultThreadLinkRules: rules,
+          projectThreadLinkOverrides: { [projectId]: [] },
+        });
+        const change = Option.getOrUndefined(yield* Stream.runHead(changes));
+        assert.deepStrictEqual(change?.defaultThreadLinkRules, rules);
+        const persisted = yield* fileSystem
+          .readFileString(serverConfig.settingsPath)
+          .pipe(Effect.flatMap(decodeServerSettingsJson));
+        assert.deepStrictEqual(persisted.defaultThreadLinkRules, rules);
+        assert.deepStrictEqual(persisted.projectThreadLinkOverrides[projectId], []);
+        yield* serverSettings.updateSettings({ projectThreadLinkOverrides: { [projectId]: null } });
+        const reset = yield* fileSystem
+          .readFileString(serverConfig.settingsPath)
+          .pipe(Effect.flatMap(decodeServerSettingsJson));
+        assert.deepStrictEqual(reset.defaultThreadLinkRules, rules);
+        assert.isUndefined(reset.projectThreadLinkOverrides[projectId]);
+      }),
+    ).pipe(Effect.provide(layerServerSettings())),
+  );
+
   it.effect("preserves context when reading a provider environment secret fails", () => {
     const platformCause = PlatformError.systemError({
       _tag: "PermissionDenied",
@@ -1951,6 +1983,40 @@ it.layer(NodeServices.layer)("server settings", (it) => {
       assert.isTrue(persisted.projectSettingsFolded);
       assert.isUndefined(persisted.projectSettingsOverrides[legacyProject]);
     }).pipe(Effect.provide(layerServerSettings())),
+  );
+
+  it.effect(
+    "migrates saved thread links after the upstream fold and keeps resets across reloads",
+    () =>
+      Effect.gen(function* () {
+        const serverConfig = yield* ServerConfig.ServerConfig;
+        const fileSystem = yield* FileSystem.FileSystem;
+        const service = yield* ServerSettingsModule.ServerSettingsService;
+        yield* fileSystem.writeFileString(
+          serverConfig.settingsPath,
+          '{"projectSettingsFolded":true,"projectThreadLinkOverrides":{"project":[]},"projectSettingsOverrides":{"project":{"defaultAutoPull":true}}}',
+        );
+        const initial = yield* service.getSettings;
+        assert.deepEqual(initial.projectSettingsOverrides[ProjectId.make("project")], {
+          defaultAutoPull: true,
+          defaultThreadLinkRules: [],
+        });
+        yield* service.updateSettings({
+          projectSettingsOverrides: { [ProjectId.make("project")]: { defaultAutoPull: true } },
+        });
+        const reloaded = yield* Effect.gen(function* () {
+          const fresh = yield* ServerSettingsModule.ServerSettingsService;
+          return yield* fresh.getSettings;
+        }).pipe(
+          Effect.provide(
+            Layer.fresh(ServerSettingsModule.layer).pipe(Layer.provide(ServerSecretStore.layer)),
+          ),
+        );
+        assert.deepEqual(reloaded.projectSettingsOverrides[ProjectId.make("project")], {
+          defaultAutoPull: true,
+        });
+        assert.deepEqual(reloaded.projectThreadLinkOverrides, {});
+      }).pipe(Effect.provide(layerServerSettings())),
   );
 
   it.effect("leaves an unreadable settings.json untouched instead of folding over it", () =>
