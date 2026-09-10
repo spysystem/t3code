@@ -13,6 +13,7 @@ import { resolveWorktreeCleanup } from "@t3tools/shared/projectSettings";
 
 import type { SidebarProjectSnapshot } from "../../sidebarProjectGrouping";
 import {
+  listProjectOverrides,
   persistScopedSettingsPatch,
   planProjectOverridesClear,
   planScopedSettingsClear,
@@ -191,6 +192,44 @@ describe("scoped settings writes", () => {
         worktreeKeepWhen: "uncommitted-changes",
       },
     ]);
+  });
+
+  it("saves thread-link defaults and uses the standard Reset all to clear only their overrides", () => {
+    const rules = [{ name: "Issue", pattern: "#(\\d+)", urlTemplate: "https://example.com/{1}" }];
+    const selected = ["Laptop", "Server"].map((id) =>
+      environment(id, {
+        settings: {
+          projectSettingsOverrides: {
+            [projectId]: { defaultThreadLinkRules: [], defaultAutoPull: true },
+            [ProjectId.make("another")]: { defaultThreadLinkRules: rules },
+          },
+        },
+      }),
+    );
+    const save = planScopedSettingsPatch(all, selected, { defaultThreadLinkRules: rules });
+    for (const write of save.serverWrites) {
+      const target = selected.find((entry) => entry.environmentId === write.environmentId)!;
+      target.serverConfig!.settings = applyServerSettingsPatch(
+        target.serverConfig!.settings,
+        write.patch,
+      );
+    }
+    expect(save.serverWrites).toHaveLength(2);
+    expect(
+      selected[0]!.serverConfig!.settings.projectSettingsOverrides[projectId]
+        ?.defaultThreadLinkRules,
+    ).toEqual([]);
+    const overrides = listProjectOverrides(selected, ["defaultThreadLinkRules"]);
+    expect(overrides).toHaveLength(4);
+    const reset = planProjectOverridesClear(selected, overrides, ["defaultThreadLinkRules"]);
+    for (const write of reset.serverWrites) {
+      const target = selected.find((entry) => entry.environmentId === write.environmentId)!;
+      const settings = applyServerSettingsPatch(target.serverConfig!.settings, write.patch);
+      expect(settings.defaultThreadLinkRules).toEqual(rules);
+      expect(settings.projectSettingsOverrides).toEqual({ [projectId]: { defaultAutoPull: true } });
+      expect(settings.projectThreadLinkOverrides).toEqual({});
+    }
+    expect(reset.serverWrites).toHaveLength(2);
   });
 
   it("compares idle compaction by mode, and offers Never only where every server stores it", () => {
