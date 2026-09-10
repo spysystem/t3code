@@ -494,10 +494,10 @@ const EnvironmentOrchestrationThreadSnapshotParams = Schema.Struct({
   threadId: ThreadId,
 });
 
-// Query-string window for windowed thread snapshots (GET payloads must encode
-// to strings). Both fields optional: omitting them keeps the full-snapshot
-// behavior, so pagination stays opt-in per request.
+// GET payloads must encode to strings. Pagination and new message roles are
+// opt-in so existing clients can still decode a full thread snapshot.
 const EnvironmentOrchestrationThreadSnapshotQuery = {
+  includeReasoning: Schema.optional(Schema.Literals(["true", "false"])),
   turnLimit: Schema.optional(
     Schema.FiniteFromString.check(Schema.isInt(), Schema.isGreaterThanOrEqualTo(1)),
   ),
