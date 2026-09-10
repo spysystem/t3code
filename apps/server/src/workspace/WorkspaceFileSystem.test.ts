@@ -298,49 +298,31 @@ it.layer(layerTest, { excludeTestServices: true })("WorkspaceFileSystemLive", (i
         }),
     );
 
-    it.effect.skipIf(!symlinksSupported)(
-      "rejects symlinks that resolve outside the workspace root",
-      () =>
-        Effect.gen(function* () {
-          const workspaceFileSystem = yield* WorkspaceFileSystem.WorkspaceFileSystem;
-          const fileSystem = yield* FileSystem.FileSystem;
-          const path = yield* Path.Path;
-          const cwd = yield* makeTempDir;
-          const outsideDir = yield* makeTempDir;
-          yield* writeTextFile(outsideDir, "secret.txt", "outside\n");
-          yield* fileSystem.symlink(
-            path.join(outsideDir, "secret.txt"),
-            path.join(cwd, "linked-secret.txt"),
-          );
+    it.effect("follows symlinks that resolve outside the workspace root", () =>
+      Effect.gen(function* () {
+        const workspaceFileSystem = yield* WorkspaceFileSystem.WorkspaceFileSystem;
+        const path = yield* Path.Path;
+        const cwd = yield* makeTempDir;
+        const outsideDir = yield* makeTempDir;
+        yield* writeTextFile(outsideDir, "notes/plan.md", "# plan\n");
+        const platform = yield* HostProcess.Platform;
+        yield* Effect.promise(() =>
+          NodeFSP.symlink(
+            path.join(outsideDir, "notes"),
+            path.join(cwd, "ai"),
+            platform === "win32" ? "junction" : "dir",
+          ),
+        );
 
-          const error = yield* workspaceFileSystem
-            .readFile({ cwd, relativePath: "linked-secret.txt" })
-            .pipe(Effect.flip);
-          const resolvedWorkspaceRoot = yield* fileSystem.realPath(cwd);
-          const resolvedPath = yield* fileSystem.realPath(path.join(outsideDir, "secret.txt"));
+        const file = yield* workspaceFileSystem.readFile({ cwd, relativePath: "ai/plan.md" });
 
-          expect(error).toBeInstanceOf(WorkspaceFileSystem.WorkspaceFilePathEscapeError);
-          expect(error).toMatchObject({
-            workspaceRoot: cwd,
-            relativePath: "linked-secret.txt",
-            resolvedWorkspaceRoot,
-            resolvedPath,
-          });
-          expect("cause" in error).toBe(false);
+        expect(file).toMatchObject({ relativePath: "ai/plan.md", contents: "# plan\n" });
 
-          yield* fileSystem.symlink(outsideDir, path.join(cwd, "linked-dir"));
-          const missingChildError = yield* workspaceFileSystem
-            .readFile(
-              Object.assign(
-                { cwd, relativePath: "linked-dir/missing/t3.json" },
-                { allowMissing: true },
-              ),
-            )
-            .pipe(Effect.flip);
-          expect(missingChildError).toBeInstanceOf(
-            WorkspaceFileSystem.WorkspaceFilePathEscapeError,
-          );
-        }),
+        const missing = yield* workspaceFileSystem.readFile(
+          Object.assign({ cwd, relativePath: "ai/missing/t3.json" }, { allowMissing: true }),
+        );
+        expect(missing).toMatchObject({ relativePath: "ai/missing/t3.json", exists: false });
+      }),
     );
 
     it.effect("rejects binary files without leaking their contents into the error", () =>

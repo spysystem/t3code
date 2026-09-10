@@ -223,10 +223,12 @@ export const make = Effect.gen(function* () {
   };
 
   /**
-   * Workspace-relative paths must stay inside the root, symlinks included. An
-   * absolute or `~/` path reads a host file in place, such as a report an agent
-   * wrote to a temp directory; it gets no root check. A network path does, since
-   * Windows signs in to its host with the user's NTLM credentials.
+   * Reads follow workspace symlinks, including links to external notes folders.
+   * Relative paths must still be lexically inside the workspace; writes retain
+   * their root check. An absolute or `~/` path reads a host file in place, such
+   * as a report an agent wrote to a temp directory; it gets no root check. A
+   * network path does, since Windows signs in to its host with the user's NTLM
+   * credentials.
    */
   const resolveReadTarget = Effect.fn("WorkspaceFileSystem.resolveReadTarget")(function* (
     input: ProjectReadFileInput,
@@ -275,48 +277,8 @@ export const make = Effect.gen(function* () {
       relativePath: input.relativePath,
     });
 
-    const realWorkspaceRoot = yield* Effect.tryPromise({
-      try: () => NodeFSP.realpath(path.resolve(input.cwd)),
-      catch: (cause) =>
-        new WorkspaceFileSystemOperationError({
-          workspaceRoot: input.cwd,
-          relativePath: input.relativePath,
-          resolvedPath: target.absolutePath,
-          operationPath: input.cwd,
-          operation: "realpath-workspace-root",
-          cause,
-        }),
-    });
-    const resolved = yield* Effect.tryPromise({
-      try: async () => {
-        let candidate = target.absolutePath;
-        for (;;) {
-          try {
-            return {
-              realTargetPath: path.join(
-                await NodeFSP.realpath(candidate),
-                path.relative(candidate, target.absolutePath),
-              ),
-              exists: candidate === target.absolutePath,
-            };
-          } catch (error) {
-            if (!input.allowMissing || (error as NodeJS.ErrnoException).code !== "ENOENT") {
-              throw error;
-            }
-            // Like writes, missing reads must check the nearest existing ancestor.
-            // An existing entry that cannot resolve is a dangling link, not absence.
-            const exists = await NodeFSP.lstat(candidate).then(
-              () => true,
-              (cause: NodeJS.ErrnoException) => {
-                if (cause.code !== "ENOENT") throw cause;
-                return false;
-              },
-            );
-            if (exists || path.dirname(candidate) === candidate) throw error;
-            candidate = path.dirname(candidate);
-          }
-        }
-      },
+    const realTargetPath = yield* Effect.tryPromise({
+      try: () => NodeFSP.realpath(target.absolutePath),
       catch: (cause) =>
         new WorkspaceFileSystemOperationError({
           workspaceRoot: input.cwd,
@@ -326,19 +288,14 @@ export const make = Effect.gen(function* () {
           operation: "realpath-target",
           cause,
         }),
-    });
-    if (!isInsideRealRoot(realWorkspaceRoot, resolved.realTargetPath)) {
-      return yield* new WorkspaceFilePathEscapeError({
-        workspaceRoot: input.cwd,
-        relativePath: input.relativePath,
-        resolvedWorkspaceRoot: realWorkspaceRoot,
-        resolvedPath: resolved.realTargetPath,
-      });
-    }
-    return {
-      relativePath: target.relativePath,
-      realTargetPath: resolved.exists ? resolved.realTargetPath : null,
-    };
+    }).pipe(
+      Effect.catchIf(
+        (error) =>
+          input.allowMissing === true && (error.cause as NodeJS.ErrnoException).code === "ENOENT",
+        () => Effect.succeed(null),
+      ),
+    );
+    return { relativePath: target.relativePath, realTargetPath };
   });
 
   const readFile: WorkspaceFileSystem["Service"]["readFile"] = Effect.fn(
