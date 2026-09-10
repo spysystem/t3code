@@ -160,6 +160,7 @@ import {
   WORK_GROUP_TOGGLE_HEIGHT,
 } from "./thread-work-log";
 import { appendPendingThreadMessages, type PendingThreadFeedEntry } from "./pending-thread-feed";
+import { reasoningPresentation } from "@t3tools/client-runtime/reasoning";
 import type { QueuedThreadMessage } from "../../state/thread-outbox-model";
 import { useMarkdownCodeHighlight } from "./markdownCodeHighlightState";
 import {
@@ -1451,6 +1452,59 @@ function renderFeedEntry(
 
   if (entry.type === "message") {
     const { message } = entry;
+    if (message.role === "reasoning") {
+      const presentation = reasoningPresentation(
+        message,
+        props.unsettledTurnId,
+        props.expandedWorkRows[message.id],
+      );
+      return (
+        <View className="mb-3 min-w-0 px-1">
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{
+              expanded: presentation.expanded,
+              disabled: presentation.active || !presentation.hasText,
+            }}
+            disabled={presentation.active || !presentation.hasText}
+            onPress={() => props.onToggleWorkRow(message.id, entry.id)}
+            className="min-h-11 flex-row items-center gap-2"
+          >
+            <SymbolView name="brain" size={16} tintColor={iconSubtleColor} />
+            <Text className="font-t3-medium text-sm text-foreground-muted">
+              {presentation.label}
+            </Text>
+            {presentation.preview ? (
+              <Text className="min-w-0 shrink text-sm text-foreground-muted" numberOfLines={1}>
+                {presentation.preview}
+              </Text>
+            ) : null}
+            {presentation.hasText ? (
+              <ThreadDisclosureChevron
+                expanded={presentation.expanded}
+                collapsedDirection="right"
+                size={15}
+                tintColor={iconSubtleColor}
+              />
+            ) : null}
+          </Pressable>
+          {presentation.expanded && presentation.hasText ? (
+            <View className="border-l border-adaptive-neutral-200-a80-white-a8 pl-3">
+              <MarkdownImageAvailableWidthContext value={props.markdownContentWidth}>
+                <AssistantMarkdownContent
+                  markdown={message.text}
+                  markdownStyles={markdownStyles.assistant}
+                  linkHandlers={props.markdownLinkHandlers}
+                  onUseArtifactTemplate={props.onUseArtifactTemplate}
+                  renderImage={props.renderMarkdownImage}
+                  skills={props.skills}
+                />
+              </MarkdownImageAvailableWidthContext>
+            </View>
+          ) : null}
+        </View>
+      );
+    }
     const isUser = message.role === "user";
     const renderedText = renderAssistantCitationsAsText(message.text);
     const styles = isUser ? markdownStyles.user : markdownStyles.assistant;

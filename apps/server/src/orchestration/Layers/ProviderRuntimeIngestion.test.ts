@@ -1322,7 +1322,7 @@ describe("ProviderRuntimeIngestion", () => {
     const harness = await createHarness();
     const initial = await harness.readModel();
 
-    for (const streamKind of ["reasoning_text", "command_output", "file_change_output"] as const) {
+    for (const streamKind of ["command_output", "file_change_output"] as const) {
       harness.emit({
         type: "content.delta",
         eventId: asEventId(`evt-ignored-${streamKind}`),
@@ -1339,6 +1339,116 @@ describe("ProviderRuntimeIngestion", () => {
 
     await harness.drain();
     expect(await harness.readModel()).toEqual(initial);
+  });
+
+  it.each(["reasoning_text", "reasoning_summary_text"] as const)(
+    "persists %s phases without treating them as answers",
+    async (streamKind) => {
+      const harness = await createHarness();
+      const base = {
+        provider: ProviderDriverKind.make("codex"),
+        threadId: asThreadId("thread-1"),
+        turnId: asTurnId("turn-thinking"),
+        createdAt: "2026-01-01T00:00:00.000Z",
+      };
+      harness.emit({ ...base, eventId: asEventId("thinking-turn-start"), type: "turn.started" });
+      harness.emit({
+        ...base,
+        eventId: asEventId("thinking-start"),
+        itemId: asItemId("thinking-1"),
+        type: "item.started",
+        payload: { itemType: "reasoning" },
+      });
+      harness.emit({
+        ...base,
+        eventId: asEventId("thinking-text-1"),
+        itemId: asItemId("thinking-1"),
+        type: "content.delta",
+        payload: { streamKind, delta: "Compare " },
+      });
+      harness.emit({
+        ...base,
+        eventId: asEventId("thinking-text-2"),
+        itemId: asItemId("thinking-1"),
+        type: "content.delta",
+        payload: { streamKind, delta: "the approaches." },
+      });
+      await harness.drain();
+      const live = (await harness.readModel()).threads[0]!;
+      expect(live.messages.filter((message) => message.role === "reasoning")).toMatchObject([
+        { text: "Compare the approaches.", streaming: true },
+      ]);
+      expect(live.latestTurn?.assistantMessageId).toBeNull();
+
+      harness.emit({
+        ...base,
+        eventId: asEventId("thinking-complete"),
+        itemId: asItemId("thinking-1"),
+        type: "item.completed",
+        payload: { itemType: "reasoning", detail: "Compared the approaches." },
+      });
+      await harness.drain();
+      const completed = (await harness.readModel()).threads[0]!;
+      expect(completed.messages.filter((message) => message.role === "reasoning")).toMatchObject([
+        { text: "Compared the approaches.", streaming: false },
+      ]);
+      expect(completed.session?.status).toBe("running");
+
+      harness.emit({
+        ...base,
+        eventId: asEventId("thinking-second"),
+        itemId: asItemId("thinking-2"),
+        type: "item.started",
+        payload: { itemType: "reasoning" },
+      });
+      harness.emit({
+        ...base,
+        eventId: asEventId("thinking-stop"),
+        type: "turn.aborted",
+        payload: {},
+      });
+      await harness.drain();
+      // readModel rehydrates messages from SQLite, as reconnect/reload does.
+      const reloaded = (await harness.readModel()).threads[0]!;
+      expect(reloaded.messages.filter((message) => message.role === "reasoning")).toMatchObject([
+        { text: "Compared the approaches.", streaming: false },
+        { text: "", streaming: false },
+      ]);
+    },
+  );
+
+  it("finalizes both phases when a completed reasoning item supersedes an open one", async () => {
+    const harness = await createHarness();
+    const base = {
+      provider: ProviderDriverKind.make("codex"),
+      threadId: asThreadId("thread-1"),
+      turnId: asTurnId("turn-thinking"),
+      createdAt: "2026-01-01T00:00:00.000Z",
+    };
+    harness.emit({ ...base, eventId: asEventId("thinking-turn-start"), type: "turn.started" });
+    harness.emit({
+      ...base,
+      eventId: asEventId("thinking-start"),
+      itemId: asItemId("thinking-1"),
+      type: "item.started",
+      payload: { itemType: "reasoning" },
+    });
+    harness.emit({
+      ...base,
+      eventId: asEventId("thinking-complete"),
+      itemId: asItemId("thinking-2"),
+      type: "item.completed",
+      payload: { itemType: "reasoning", detail: "Completed summary." },
+    });
+    await harness.drain();
+    expect(
+      (await harness.readModel()).threads[0]!.messages.filter(
+        (message) => message.role === "reasoning",
+      ),
+    ).toMatchObject([
+      { text: "", streaming: false },
+      { text: "Completed summary.", streaming: false },
+    ]);
   });
 
   it("maps canonical content delta/item completed into finalized assistant messages", async () => {

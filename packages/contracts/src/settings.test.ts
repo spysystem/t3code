@@ -167,6 +167,20 @@ describe("ClientSettings load balancing", () => {
   });
 });
 
+describe("ClientSettings thinking", () => {
+  it("hides thinking for new and existing settings without a saved choice", () => {
+    expect(decodeClientSettings({}).showThinking).toBe(false);
+    expect(decodeClientSettings({ filesShowIgnored: true }).showThinking).toBe(false);
+  });
+
+  it.each([true, false])("preserves a saved choice of %s", (showThinking) => {
+    expect(encodeClientSettings(decodeClientSettings({ showThinking })).showThinking).toBe(
+      showThinking,
+    );
+    expect(decodeClientSettingsPatch({ showThinking }).showThinking).toBe(showThinking);
+  });
+});
+
 describe("ClientSettings ignored files", () => {
   it("hides ignored files by default and accepts opting in", () => {
     expect(decodeClientSettings({}).filesShowIgnored).toBe(false);
