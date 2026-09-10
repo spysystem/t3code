@@ -53,6 +53,7 @@ import { forkParked } from "../../serverActivation.ts";
 import { ServerSettingsService } from "../../serverSettings.ts";
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import { canReplaceThreadTitle } from "../threadTitles.ts";
+import { advanceReasoning, type ReasoningState } from "../reasoning.ts";
 
 const providerTurnKey = (threadId: ThreadId, turnId: TurnId) => `${threadId}:${turnId}`;
 const providerTaskKey = (threadId: ThreadId, taskId: string) => `${threadId}:${taskId}`;
@@ -928,6 +929,12 @@ const make = Effect.gen(function* () {
     lookup: () => Effect.succeed(""),
   });
 
+  const reasoningByThreadId = yield* Cache.make<ThreadId, ReasoningState>({
+    capacity: TURN_MESSAGE_IDS_BY_TURN_CACHE_CAPACITY,
+    timeToLive: TURN_MESSAGE_IDS_BY_TURN_TTL,
+    lookup: () => Effect.succeed({ completedItemIds: [] }),
+  });
+
   const assistantSegmentStateByTurnKey = yield* Cache.make<string, AssistantSegmentState>({
     capacity: TURN_MESSAGE_IDS_BY_TURN_CACHE_CAPACITY,
     timeToLive: TURN_MESSAGE_IDS_BY_TURN_TTL,
@@ -1477,7 +1484,12 @@ const make = Effect.gen(function* () {
 
   const processRuntimeEvent = (event: ProviderRuntimeEvent) =>
     Effect.gen(function* () {
-      if (event.type === "content.delta" && event.payload.streamKind !== "assistant_text") {
+      if (
+        event.type === "content.delta" &&
+        event.payload.streamKind !== "assistant_text" &&
+        event.payload.streamKind !== "reasoning_text" &&
+        event.payload.streamKind !== "reasoning_summary_text"
+      ) {
         return;
       }
 
@@ -1554,6 +1566,35 @@ const make = Effect.gen(function* () {
         event.type === "turn.started" && shouldApplyThreadLifecycle
           ? yield* getSourceProposedPlanReferenceForAcceptedTurnStart(thread.id, eventTurnId)
           : null;
+
+      // Ignore late traffic from a superseded turn, but always close an active
+      // phase when the owning session exits. A busy indicator never opens one.
+      if (
+        (!conflictsWithActiveTurn ||
+          conflictingTurnStartIsPendingTurnStart ||
+          event.type === "session.exited") &&
+        shouldApplyThreadLifecycle
+      ) {
+        const reasoning = advanceReasoning(yield* Cache.get(reasoningByThreadId, thread.id), event);
+        for (const update of reasoning.updates) {
+          const common = {
+            commandId: yield* providerCommandId(
+              event,
+              `reasoning-${update.type}:${update.messageId}`,
+            ),
+            threadId: thread.id,
+            messageId: update.messageId,
+            turnId: update.turnId,
+            createdAt: now,
+          };
+          yield* orchestrationEngine.dispatch(
+            update.type === "delta"
+              ? { ...common, type: "thread.message.reasoning.delta", delta: update.text }
+              : { ...common, type: "thread.message.reasoning.complete", text: update.text },
+          );
+        }
+        yield* Cache.set(reasoningByThreadId, thread.id, reasoning.state);
+      }
 
       if (
         event.type === "session.started" ||
