@@ -48,6 +48,7 @@ import {
 } from "./threadListV2";
 import { QueuedMessageIcon } from "./queued-message-icon";
 import { ThreadSearchMatchExcerpt } from "./thread-search-match";
+import { ThreadLink, threadLinkAccessibilityProps, useThreadLink } from "./thread-link";
 
 /**
  * Thread List v2 renders one flat native list: rich edge-to-edge rows for
@@ -551,6 +552,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   const dormant = useSwipeRowDormant(props.activationKey);
 
   const pr = useThreadPr(thread);
+  const taskLink = useThreadLink(thread);
 
   const theme = useUniwindTheme();
   const sidebarPane = props.pane === "sidebar";
@@ -1050,6 +1052,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
             </Text>
           </View>
         ) : null}
+        {taskLink ? <ThreadLink task={taskLink} selected={selected} /> : null}
         {props.providerInstance ? (
           <ProviderInstanceIcon
             provider={props.providerInstance.driverKind}
@@ -1072,6 +1075,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
         interactionOpacity={rowAppearance.interactionOpacity}
         className={rowAppearance.className}
         accessibilityHint={swipeAccessibilityHint}
+        {...threadLinkAccessibilityProps(taskLink)}
         accessibilityLabel={
           props.hasQueuedMessages ? `${thread.title}, messages queued to send` : thread.title
         }
@@ -1104,6 +1108,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
         interactionClassName={rowAppearance.interactionClassName}
         interactionOpacity={rowAppearance.interactionOpacity}
         accessibilityHint={swipeAccessibilityHint}
+        {...threadLinkAccessibilityProps(taskLink)}
         accessibilityLabel={
           props.hasQueuedMessages ? `${thread.title}, messages queued to send` : thread.title
         }
@@ -1157,6 +1162,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
             ) : null}
           </View>
           {props.hasQueuedMessages ? <QueuedMessageIcon selected={selected} /> : null}
+          {taskLink ? <ThreadLink task={taskLink} selected={selected} /> : null}
           <Text
             className={cn(
               "text-sm tabular-nums",
