@@ -26,6 +26,8 @@ import {
   fileBreadcrumbs,
 } from "./filePath";
 import { useProjectEntriesQuery } from "./projectFilesQueryState";
+import { selectFilesShowIgnored, visibleFileEntries } from "./ignoredEntries";
+import { useClientSettings } from "~/hooks/useSettings";
 
 interface FileBreadcrumbsProps {
   readonly cwd: string;
@@ -79,6 +81,7 @@ function BreadcrumbMenuContent(props: {
   readonly workspaceMutationId: string | null;
 }) {
   const entriesQuery = useProjectEntriesQuery(props.environmentId, props.cwd, props.directoryPath);
+  const showIgnored = useClientSettings(selectFilesShowIgnored);
   useWorkspaceMutationRefresh({
     mutationId: props.workspaceMutationId,
     refresh: entriesQuery.refresh,
@@ -88,8 +91,8 @@ function BreadcrumbMenuContent(props: {
   const entries = entriesQuery.data?.entries ?? [];
   const entriesTruncated = entriesQuery.data?.truncated ?? false;
   const children = useMemo(
-    () => fileBreadcrumbChildren(entries, props.directoryPath),
-    [entries, props.directoryPath],
+    () => fileBreadcrumbChildren(visibleFileEntries(entries, showIgnored), props.directoryPath),
+    [entries, props.directoryPath, showIgnored],
   );
   const directoryAvailable = entriesQuery.data !== null;
   const parentPath = fileBreadcrumbParent(props.directoryPath);

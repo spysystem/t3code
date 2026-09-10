@@ -654,6 +654,54 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
     return relativePaths.filter((relativePath) => !ignoredPaths.has(relativePath));
   });
 
+  // `--directory` stops git at the first fully ignored directory, so a
+  // `node_modules` costs one entry and no traversal. Paths ending in `/` are
+  // those collapsed directories.
+  const listIgnoredEntries: NonNullable<VcsDriver.VcsDriver["Service"]["listIgnoredEntries"]> = (
+    cwd,
+  ) =>
+    gitCommand(
+      vcsProcess,
+      "GitVcsDriver.listIgnoredEntries",
+      cwd,
+      [
+        ...WORKSPACE_GIT_HARDENED_CONFIG_ARGS,
+        "ls-files",
+        "--others",
+        "--ignored",
+        "--exclude-standard",
+        "--directory",
+        "-z",
+      ],
+      {
+        allowNonZeroExit: true,
+        timeoutMs: 20_000,
+        maxOutputBytes: WORKSPACE_FILES_MAX_OUTPUT_BYTES,
+        appendTruncationMarker: true,
+      },
+    ).pipe(
+      Effect.flatMap((result) =>
+        result.exitCode === 0
+          ? Effect.succeed({
+              entries: splitNullSeparatedGitStdoutPaths(result).map((rawPath) =>
+                rawPath.endsWith("/")
+                  ? { path: rawPath.slice(0, -1), kind: "directory" as const }
+                  : { path: rawPath, kind: "file" as const },
+              ),
+              truncated: result.stdoutTruncated,
+            })
+          : Effect.fail(
+              new VcsProcessExitError({
+                operation: "GitVcsDriver.listIgnoredEntries",
+                command: "git ls-files",
+                cwd,
+                exitCode: result.exitCode,
+                detail: result.stderr.trim() || "git ls-files failed",
+              }),
+            ),
+      ),
+    );
+
   const initRepository: VcsDriver.VcsDriver["Service"]["initRepository"] = (input) =>
     gitCommand(vcsProcess, "GitVcsDriver.initRepository", input.cwd, ["init"], {
       timeoutMs: 10_000,
@@ -966,6 +1014,7 @@ export const makeVcsDriverShape = Effect.fn("makeGitVcsDriverShape")(function* (
     listWorkspaceFiles,
     listRemotes,
     filterIgnoredPaths,
+    listIgnoredEntries,
     initRepository,
   };
 });

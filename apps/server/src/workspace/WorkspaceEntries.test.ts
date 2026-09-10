@@ -12,6 +12,7 @@ import { vi } from "vite-plus/test";
 
 import * as ServerConfig from "../config.ts";
 import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
+import * as VcsDriverRegistry from "../vcs/VcsDriverRegistry.ts";
 import * as VcsProcess from "../vcs/VcsProcess.ts";
 import * as WorkspaceEntries from "./WorkspaceEntries.ts";
 import * as WorkspacePaths from "./WorkspacePaths.ts";
@@ -24,6 +25,7 @@ vi.mock("node:fs/promises", async (importOriginal) => {
 const TestLayer = Layer.empty.pipe(
   Layer.provideMerge(WorkspaceEntries.layer.pipe(Layer.provide(WorkspacePaths.layer))),
   Layer.provideMerge(WorkspacePaths.layer),
+  Layer.provideMerge(VcsDriverRegistry.layer),
   Layer.provideMerge(VcsProcess.layer),
   Layer.provide(
     ServerConfig.ServerConfig.layerTest(process.cwd(), {
@@ -134,29 +136,33 @@ it.layer(TestLayer, { excludeTestServices: true })("WorkspaceEntries", (it) => {
       }),
     );
 
-    it.effect(
-      "rejects directory traversal, git internals, and symlinks outside the workspace",
-      () =>
-        Effect.gen(function* () {
-          const cwd = yield* makeTempDir();
-          const outside = yield* makeTempDir();
-          const fileSystem = yield* FileSystem.FileSystem;
-          const path = yield* Path.Path;
-          yield* writeTextFile(cwd, ".git/HEAD");
-          const platform = yield* HostProcessPlatform;
-          if (platform !== "win32") yield* fileSystem.symlink(outside, path.join(cwd, "external"));
-          const workspaceEntries = yield* WorkspaceEntries.WorkspaceEntries;
-          for (const directoryPath of [
-            "../",
+    it.effect("rejects directory traversal and git internals while allowing workspace links", () =>
+      Effect.gen(function* () {
+        const cwd = yield* makeTempDir();
+        const outside = yield* makeTempDir();
+        yield* writeTextFile(outside, "note.md");
+        const path = yield* Path.Path;
+        yield* writeTextFile(cwd, ".git/HEAD");
+        const platform = yield* HostProcessPlatform;
+        yield* Effect.promise(() =>
+          NodeFSP.symlink(
             outside,
-            ".git",
-            "missing",
-            ...(platform !== "win32" ? ["external"] : []),
-          ]) {
-            const error = yield* workspaceEntries.list({ cwd, directoryPath }).pipe(Effect.flip);
-            expect(error._tag).toBe("WorkspaceEntriesReadDirectoryError");
-          }
-        }),
+            path.join(cwd, "external"),
+            platform === "win32" ? "junction" : "dir",
+          ),
+        );
+        const workspaceEntries = yield* WorkspaceEntries.WorkspaceEntries;
+        for (const directoryPath of ["../", outside, ".git", "missing"]) {
+          const error = yield* workspaceEntries.list({ cwd, directoryPath }).pipe(Effect.flip);
+          expect(error._tag).toBe("WorkspaceEntriesReadDirectoryError");
+        }
+        expect(yield* workspaceEntries.list({ cwd, directoryPath: "external" })).toEqual({
+          entries: [{ path: "external/note.md", kind: "file" }],
+          truncated: false,
+        });
+        const root = yield* workspaceEntries.list({ cwd, directoryPath: "" });
+        expect(root.entries).toContainEqual({ path: "external", kind: "directory" });
+      }),
     );
 
     it.effect(
@@ -215,6 +221,51 @@ it.layer(TestLayer, { excludeTestServices: true })("WorkspaceEntries", (it) => {
         );
         expect(result.entries.some((entry) => entry.path.startsWith("node_modules"))).toBe(false);
         expect(result.truncated).toBe(false);
+      }),
+    );
+
+    it.effect("includes ignored entries on request with ignored directories collapsed", () =>
+      Effect.gen(function* () {
+        const cwd = yield* makeTempDir({ prefix: "t3code-workspace-list-ignored-", git: true });
+        yield* writeTextFile(cwd, ".gitignore", "node_modules/\n.env\nnotes/\n");
+        yield* writeTextFile(cwd, "src/keep.ts", "export {};");
+        yield* writeTextFile(cwd, ".env", "SECRET=1");
+        yield* writeTextFile(cwd, "node_modules/pkg/index.js");
+        yield* writeTextFile(cwd, "notes/spec.md", "# spec");
+
+        const workspaceEntries = yield* WorkspaceEntries.WorkspaceEntries;
+        const plain = yield* workspaceEntries.list({ cwd });
+        const withIgnored = yield* workspaceEntries.list({ cwd, includeIgnored: true });
+
+        expect(plain.entries.some((entry) => entry.ignored)).toBe(false);
+        expect(plain.entries.map((entry) => entry.path)).not.toContain(".env");
+
+        expect(withIgnored.entries).toEqual(
+          expect.arrayContaining([
+            { path: "src/keep.ts", kind: "file" },
+            { path: ".env", kind: "file", ignored: true },
+            { path: "node_modules", kind: "directory", ignored: true },
+            { path: "notes", kind: "directory", ignored: true },
+          ]),
+        );
+        const paths = withIgnored.entries.map((entry) => entry.path);
+        expect(paths.some((entryPath) => entryPath.startsWith("node_modules/"))).toBe(false);
+        expect(paths).not.toContain("notes/spec.md");
+        expect(paths).not.toContain(".git");
+        expect(withIgnored.truncated).toBe(false);
+      }),
+    );
+
+    it.effect("falls back to the plain listing outside a repository", () =>
+      Effect.gen(function* () {
+        const cwd = yield* makeTempDir({ prefix: "t3code-workspace-list-ignored-nogit-" });
+        yield* writeTextFile(cwd, "src/keep.ts", "export {};");
+        yield* writeTextFile(cwd, "node_modules/pkg/index.js");
+
+        const workspaceEntries = yield* WorkspaceEntries.WorkspaceEntries;
+        const result = yield* workspaceEntries.list({ cwd, includeIgnored: true });
+
+        expect(result.entries.map((entry) => entry.path)).toEqual(["src", "src/keep.ts"]);
       }),
     );
   });
