@@ -30,6 +30,7 @@ import { resolveProviderInstanceTerminalEnvironment } from "./terminal/Manager.t
 
 const decodeSettingsPatch = Schema.decodeUnknownEffect(ServerSettingsPatch);
 const decodeServerSettings = Schema.decodeUnknownEffect(ServerSettings);
+const decodeSettingsFile = Schema.decodeUnknownEffect(Schema.fromJsonString(ServerSettings));
 
 const makeServerSettingsLayer = () =>
   ServerSettingsModule.layer.pipe(
@@ -78,6 +79,38 @@ const recordProviderUsage = (provider: string, instanceId: string | null = provi
   });
 
 it.layer(NodeServices.layer)("server settings", (it) => {
+  it.effect("persists and broadcasts thread link rules and resets project inheritance", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const serverConfig = yield* ServerConfig.ServerConfig;
+        const fileSystem = yield* FileSystem.FileSystem;
+        const serverSettings = yield* ServerSettingsModule.ServerSettingsService;
+        const projectId = ProjectId.make("thread-links-project");
+        const rules = [
+          { name: "Issue", pattern: "#(\\d+)", urlTemplate: "https://tracker.example/{1}" },
+        ];
+        const changes = yield* serverSettings.subscribeChanges;
+        yield* serverSettings.updateSettings({
+          defaultThreadLinkRules: rules,
+          projectThreadLinkOverrides: { [projectId]: [] },
+        });
+        const change = Option.getOrUndefined(yield* Stream.runHead(changes));
+        assert.deepStrictEqual(change?.defaultThreadLinkRules, rules);
+        const persisted = yield* fileSystem
+          .readFileString(serverConfig.settingsPath)
+          .pipe(Effect.flatMap(decodeSettingsFile));
+        assert.deepStrictEqual(persisted.defaultThreadLinkRules, rules);
+        assert.deepStrictEqual(persisted.projectThreadLinkOverrides[projectId], []);
+        yield* serverSettings.updateSettings({ projectThreadLinkOverrides: { [projectId]: null } });
+        const reset = yield* fileSystem
+          .readFileString(serverConfig.settingsPath)
+          .pipe(Effect.flatMap(decodeSettingsFile));
+        assert.deepStrictEqual(reset.defaultThreadLinkRules, rules);
+        assert.isUndefined(reset.projectThreadLinkOverrides[projectId]);
+      }),
+    ).pipe(Effect.provide(makeServerSettingsLayer())),
+  );
+
   it.effect("preserves context when reading a provider environment secret fails", () => {
     const platformCause = PlatformError.systemError({
       _tag: "PermissionDenied",

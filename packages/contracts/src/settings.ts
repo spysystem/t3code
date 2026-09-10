@@ -39,6 +39,7 @@ import {
   type ProviderDriverKind,
 } from "./providerInstance.ts";
 import { PullRequestMergeMethod } from "./pullRequest.ts";
+import { ThreadLinkRules } from "./threadLinks.ts";
 
 // ── Client Settings (local-only) ───────────────────────────────
 
@@ -1027,6 +1028,10 @@ export const ServerSettings = Schema.Struct({
     Schema.withDecodingDefault(Effect.succeed({})),
   ),
   defaultAutoPull: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
+  defaultThreadLinkRules: ThreadLinkRules.pipe(Schema.withDecodingDefault(Effect.succeed([]))),
+  projectThreadLinkOverrides: Schema.Record(ProjectId, ThreadLinkRules).pipe(
+    Schema.withDecodingDefault(Effect.succeed({})),
+  ),
   defaultProjectScripts: Schema.Array(ProjectScript).pipe(
     Schema.withDecodingDefault(Effect.succeed([])),
   ),
@@ -1347,6 +1352,10 @@ export const ServerSettingsPatch = Schema.Struct({
     Schema.Record(ProjectId, Schema.NullOr(Schema.Boolean)),
   ),
   defaultAutoPull: Schema.optionalKey(Schema.Boolean),
+  defaultThreadLinkRules: Schema.optionalKey(ThreadLinkRules),
+  projectThreadLinkOverrides: Schema.optionalKey(
+    Schema.Record(ProjectId, Schema.NullOr(ThreadLinkRules)),
+  ),
   defaultProjectScripts: Schema.optionalKey(Schema.Array(ProjectScript)),
   projectScriptOverrides: Schema.optionalKey(
     Schema.Record(ProjectId, Schema.NullOr(Schema.Array(ProjectScript))),
