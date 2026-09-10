@@ -931,6 +931,16 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     } satisfies Record<string, string>;
   });
 
+  /**
+   * Attach the `t3-code` MCP server to the session that is about to start.
+   *
+   * Every session gets a credential: pull request and thread metadata tools
+   * only affect the session's own thread and are always on. Browser access
+   * is a capability on that credential, so turning the setting off withholds
+   * the preview tools without taking the server away. `issueActiveMcpCredential`
+   * revokes the thread's previous token first, which matters because a session
+   * restart (runtime mode, cwd, model) re-prepares without stopping.
+   */
   const prepareMcpSession = (threadId: ThreadId, providerInstanceId: ProviderInstanceId) =>
     Effect.gen(function* () {
       const capabilities = yield* agentAccessCapabilities(threadId);

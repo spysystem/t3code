@@ -1211,6 +1211,22 @@ it.effect("rejects an explicit title combined with title regeneration", () =>
   }),
 );
 
+it.effect("preserves the expected title when decoding an automatic rename", () =>
+  Effect.gen(function* () {
+    const command = yield* decodeOrchestrationCommand({
+      type: "thread.meta.update",
+      commandId: "automatic-title",
+      threadId: "thread-1",
+      title: "Generated title",
+      expectedTitle: "Previous title",
+    });
+    assert.strictEqual(command.type, "thread.meta.update");
+    if (command.type === "thread.meta.update") {
+      assert.strictEqual(command.expectedTitle, "Previous title");
+    }
+  }),
+);
+
 it.effect("accepts a source proposed plan reference in thread.turn.start", () =>
   Effect.gen(function* () {
     const parsed = yield* decodeThreadTurnStartCommand({

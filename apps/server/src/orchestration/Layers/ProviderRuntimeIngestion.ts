@@ -1945,12 +1945,15 @@ const make = Effect.gen(function* () {
 
       if (event.type === "thread.metadata.updated" && event.payload.name) {
         if (canReplaceThreadTitle(thread.title)) {
-          yield* orchestrationEngine.dispatch({
-            type: "thread.meta.update",
-            commandId: yield* providerCommandId(event, "thread-meta-update"),
-            threadId: thread.id,
-            title: event.payload.name,
-          });
+          yield* orchestrationEngine
+            .dispatch({
+              type: "thread.meta.update",
+              commandId: yield* providerCommandId(event, "thread-meta-update"),
+              threadId: thread.id,
+              title: event.payload.name,
+              expectedTitle: thread.title,
+            })
+            .pipe(Effect.catchTag("OrchestrationCommandInvariantError", () => Effect.void));
         }
       }
 
