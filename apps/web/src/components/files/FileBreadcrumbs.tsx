@@ -14,6 +14,7 @@ import {
   MenuTrigger,
 } from "~/components/ui/menu";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
+import { useClientSettings } from "~/hooks/useSettings";
 import { useTheme } from "~/hooks/useTheme";
 import { useWorkspaceMutationRefresh } from "~/hooks/useWorkspaceMutationRefresh";
 import { cn } from "~/lib/utils";
@@ -25,6 +26,7 @@ import {
   fileBreadcrumbParent,
   fileBreadcrumbs,
 } from "./filePath";
+import { selectFilesShowIgnored } from "./ignoredEntries";
 import { useProjectEntriesQuery } from "./projectFilesQueryState";
 
 interface FileBreadcrumbsProps {
@@ -78,7 +80,12 @@ function BreadcrumbMenuContent(props: {
   readonly rootPath: string;
   readonly workspaceMutationId: string | null;
 }) {
-  const entriesQuery = useProjectEntriesQuery(props.environmentId, props.cwd);
+  // Shares the Files panel's listing atom, so toggling ignored files never
+  // costs a second full workspace listing.
+  const showIgnored = useClientSettings(selectFilesShowIgnored);
+  const entriesQuery = useProjectEntriesQuery(props.environmentId, props.cwd, {
+    includeIgnored: showIgnored,
+  });
   useWorkspaceMutationRefresh({
     mutationId: props.workspaceMutationId,
     refresh: entriesQuery.refresh,

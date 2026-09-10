@@ -7,7 +7,7 @@ import type { EnvironmentId, ProjectEntry } from "@t3tools/contracts";
 import { FileTree, useFileTree, useFileTreeSearch, useFileTreeSelector } from "@pierre/trees/react";
 import { serializeComposerFileLink } from "@t3tools/shared/composerTrigger";
 import { ChevronsDownUpIcon, ChevronsUpDownIcon } from "lucide-react";
-import { useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "~/components/ui/button";
 import { InputGroup, InputGroupInput } from "~/components/ui/input-group";
@@ -15,15 +15,19 @@ import { toastManager } from "~/components/ui/toast";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
 import { useComposerHandleContext } from "~/composerHandleContext";
 import { writeTextToClipboard } from "~/hooks/useCopyToClipboard";
+import { useClientSettings } from "~/hooks/useSettings";
 import { useTheme } from "~/hooks/useTheme";
 import { useWorkspaceMutationRefresh } from "~/hooks/useWorkspaceMutationRefresh";
 import { readLocalApi } from "~/localApi";
 import { T3_PIERRE_ICONS } from "~/pierre-icons";
 import { PIERRE_TREE_UNSAFE_CSS, pierreTreeStyle } from "~/pierre-tree-theme";
+import { projectEnvironment } from "~/state/projects";
+import { useAtomQueryRunner } from "~/state/use-atom-query-runner";
 
 import { createFileTreeDragMentionController } from "./fileTreeDragMention";
 import { areAllDirectoriesExpanded, setAllDirectoriesExpanded } from "./fileTreeExpansion";
 import { buildFileTreePathUpdates } from "./fileTreePathReconciliation";
+import { mergeLoadedIgnoredDirectories, selectFilesShowIgnored } from "./ignoredEntries";
 import { useProjectEntriesQuery } from "./projectFilesQueryState";
 
 interface FileBrowserPanelProps {
@@ -41,6 +45,19 @@ interface FileBrowserPanelProps {
 
 function treePath(entry: ProjectEntry): string {
   return entry.kind === "directory" ? `${entry.path}/` : entry.path;
+}
+
+// Ignored styling rides on the tree's git-status lane, which also flags every
+// ancestor of a status entry as "contains changes". This tree never shows real
+// changes, so that dot would only ever mean "contains ignored files": hide it.
+const FILE_BROWSER_TREE_UNSAFE_CSS = `${PIERRE_TREE_UNSAFE_CSS}
+  button[data-type='item'][data-item-contains-git-change='true'] [data-item-section='git'] {
+    display: none;
+  }
+`;
+
+function areStringArraysEqual(previous: readonly string[], next: readonly string[]): boolean {
+  return previous.length === next.length && previous.every((value, index) => value === next[index]);
 }
 
 function RefreshFilesButton(props: { isPending: boolean; onRefresh: () => void }) {
@@ -104,8 +121,26 @@ export default function FileBrowserPanel({
 }: FileBrowserPanelProps) {
   const { resolvedTheme } = useTheme();
   const composerRef = useComposerHandleContext();
-  const entriesQuery = useProjectEntriesQuery(environmentId, cwd);
-  const entries = entriesQuery.data?.entries ?? [];
+  const showIgnored = useClientSettings(selectFilesShowIgnored);
+  const entriesQuery = useProjectEntriesQuery(environmentId, cwd, { includeIgnored: showIgnored });
+  // Ignored directories arrive collapsed; their children are fetched only when
+  // the user expands them and are kept here until the directory leaves the
+  // listing again.
+  const [loadedIgnoredDirectories, setLoadedIgnoredDirectories] = useState<
+    ReadonlyMap<string, readonly ProjectEntry[]>
+  >(() => new Map());
+  const listedEntries = entriesQuery.data?.entries;
+  const entries = useMemo(
+    () => mergeLoadedIgnoredDirectories(listedEntries ?? [], loadedIgnoredDirectories),
+    [listedEntries, loadedIgnoredDirectories],
+  );
+  const ignoredDirectoryPaths = useMemo(
+    () =>
+      entries
+        .filter((entry) => entry.kind === "directory" && entry.ignored === true)
+        .map((entry) => entry.path),
+    [entries],
+  );
   const entryKinds = useMemo(
     () => new Map(entries.map((entry) => [entry.path, entry.kind] as const)),
     [entries],
@@ -244,12 +279,56 @@ export default function FileBrowserPanel({
     },
     paths: [],
     search: false,
-    unsafeCSS: PIERRE_TREE_UNSAFE_CSS,
+    unsafeCSS: FILE_BROWSER_TREE_UNSAFE_CSS,
   });
   const search = useFileTreeSearch(model);
   const allDirectoriesExpanded = useFileTreeSelector(model, (currentModel) =>
     areAllDirectoriesExpanded(currentModel, directoryPaths),
   );
+  // The tree has no expand event, so expansion of ignored directories is
+  // observed through a selector instead.
+  const selectExpandedIgnoredDirectories = useCallback(
+    (currentModel: typeof model) =>
+      ignoredDirectoryPaths.filter((path) => {
+        const item = currentModel.getItem(`${path}/`);
+        return item !== null && "isExpanded" in item && item.isExpanded();
+      }),
+    [ignoredDirectoryPaths],
+  );
+  const expandedIgnoredDirectories = useFileTreeSelector(
+    model,
+    selectExpandedIgnoredDirectories,
+    areStringArraysEqual,
+  );
+  // Always read from disk: a directory is only requested when newly expanded
+  // or after an explicit refresh, and a cached listing would defeat the latter.
+  const loadIgnoredDirectory = useAtomQueryRunner(projectEnvironment.listDirectory, {
+    label: "Load ignored folder",
+    refresh: true,
+  });
+  const pendingIgnoredDirectoriesRef = useRef(new Set<string>());
+  useEffect(() => {
+    for (const relativePath of expandedIgnoredDirectories) {
+      if (loadedIgnoredDirectories.has(relativePath)) continue;
+      if (pendingIgnoredDirectoriesRef.current.has(relativePath)) continue;
+      pendingIgnoredDirectoriesRef.current.add(relativePath);
+      void loadIgnoredDirectory({ environmentId, input: { cwd, relativePath } }).then((result) => {
+        pendingIgnoredDirectoriesRef.current.delete(relativePath);
+        if (result._tag !== "Success") return;
+        setLoadedIgnoredDirectories((previous) => {
+          const next = new Map(previous);
+          next.set(relativePath, result.value.entries);
+          return next;
+        });
+      });
+    }
+  }, [
+    cwd,
+    environmentId,
+    expandedIgnoredDirectories,
+    loadIgnoredDirectory,
+    loadedIgnoredDirectories,
+  ]);
   const toggleAllDirectories = () => {
     setAllDirectoriesExpanded(model, directoryPaths, !allDirectoriesExpanded);
   };
@@ -261,6 +340,9 @@ export default function FileBrowserPanel({
     search.setValue(value);
   };
   const handleRefresh = () => {
+    // Expanded ignored directories reload on their own once the stale children
+    // are dropped, because they are still expanded in the tree.
+    setLoadedIgnoredDirectories(new Map());
     entriesQuery.refresh();
     onRefreshSelectedFile?.();
   };
@@ -283,6 +365,14 @@ export default function FileBrowserPanel({
     const updates = buildFileTreePathUpdates(previousTreePaths, treePaths);
     if (updates.length > 0) model.batch(updates);
   }, [entriesQuery.data, entryKinds, model, treePaths]);
+
+  const ignoredTreePaths = useMemo(
+    () => entries.filter((entry) => entry.ignored === true).map(treePath),
+    [entries],
+  );
+  useEffect(() => {
+    model.setGitStatus(ignoredTreePaths.map((path) => ({ path, status: "ignored" as const })));
+  }, [ignoredTreePaths, model]);
 
   useEffect(() => {
     if (!selectedPath) {
