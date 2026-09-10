@@ -25,7 +25,7 @@ import type {
 } from "@t3tools/contracts";
 import { isWorkspaceImagePreviewPath } from "@t3tools/shared/filePreview";
 
-const WORKSPACE_INDEX_MAX_ENTRIES = 25_000;
+export const WORKSPACE_INDEX_MAX_ENTRIES = 25_000;
 const WORKSPACE_INDEX_PAGE_SIZE = WORKSPACE_INDEX_MAX_ENTRIES + 2;
 const WORKSPACE_INDEX_SCAN_TIMEOUT = "15 seconds";
 const WORKSPACE_INDEX_SCAN_TIMEOUT_MS = 15_000;
@@ -283,7 +283,8 @@ function isWholeWordRange(
   return leftIsBoundary && rightIsBoundary;
 }
 
-function withDirectoryAncestors(entries: ReadonlyArray<ProjectEntry>): ProjectEntry[] {
+/** Adds any missing parent directories so a flat listing always forms a tree. */
+export function withDirectoryAncestors(entries: ReadonlyArray<ProjectEntry>): ProjectEntry[] {
   const entryByPath = new Map(entries.map((entry) => [entry.path, entry]));
   for (const entry of entries) {
     let parentPath = parentPathOf(entry.path);
