@@ -33,8 +33,24 @@ interface ProjectQueryState<A> {
   readonly refresh: () => void;
 }
 
-function getProjectEntriesQueryAtom(environmentId: EnvironmentId, cwd: string) {
-  return projectEnvironment.listEntries({ environmentId, input: { cwd } });
+// The flag is omitted when off so every caller without it shares one atom.
+function getProjectEntriesQueryAtom(
+  environmentId: EnvironmentId,
+  cwd: string,
+  includeIgnored: boolean,
+) {
+  return projectEnvironment.listEntries({
+    environmentId,
+    input: includeIgnored ? { cwd, includeIgnored: true } : { cwd },
+  });
+}
+
+export function getProjectDirectoryQueryAtom(
+  environmentId: EnvironmentId,
+  cwd: string,
+  relativePath: string,
+) {
+  return projectEnvironment.listDirectory({ environmentId, input: { cwd, relativePath } });
 }
 
 export function getProjectFileQueryAtom(
@@ -128,8 +144,9 @@ function errorMessage<A>(result: AsyncResult.AsyncResult<A, unknown>): string | 
 export function useProjectEntriesQuery(
   environmentId: EnvironmentId,
   cwd: string,
+  options?: { readonly includeIgnored?: boolean },
 ): ProjectQueryState<ProjectListEntriesResult> {
-  const atom = getProjectEntriesQueryAtom(environmentId, cwd);
+  const atom = getProjectEntriesQueryAtom(environmentId, cwd, options?.includeIgnored === true);
   const result = useAtomValue(atom);
   const refreshAtom = useAtomRefresh(atom);
   const refresh = useCallback(() => refreshAtom(), [refreshAtom]);

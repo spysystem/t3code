@@ -545,6 +545,9 @@ export function useSettingsRestore(onRestored?: () => void) {
       ...(settings.showSkillsInSlashMenu !== DEFAULT_UNIFIED_SETTINGS.showSkillsInSlashMenu
         ? ["Show skills in slash menu"]
         : []),
+      ...(settings.filesShowIgnored !== DEFAULT_UNIFIED_SETTINGS.filesShowIgnored
+        ? ["Show ignored files"]
+        : []),
       ...(settings.composerCollapseOnScroll !== DEFAULT_UNIFIED_SETTINGS.composerCollapseOnScroll
         ? ["Collapse composer on scroll"]
         : []),
@@ -633,6 +636,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       settings.sidebarProjectGroupingMode,
       settings.sidebarThreadPreviewCount,
       settings.showSkillsInSlashMenu,
+      settings.filesShowIgnored,
       settings.timestampFormat,
       settings.wordWrap,
       followSystem,
@@ -712,6 +716,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       diffLayout: DEFAULT_UNIFIED_SETTINGS.diffLayout,
       proactivePanelsEnabled: DEFAULT_UNIFIED_SETTINGS.proactivePanelsEnabled,
       showSkillsInSlashMenu: DEFAULT_UNIFIED_SETTINGS.showSkillsInSlashMenu,
+      filesShowIgnored: DEFAULT_UNIFIED_SETTINGS.filesShowIgnored,
       composerCollapseOnScroll: DEFAULT_UNIFIED_SETTINGS.composerCollapseOnScroll,
       contextWindowMeterEnabled: DEFAULT_UNIFIED_SETTINGS.contextWindowMeterEnabled,
       environmentIdentificationMode: DEFAULT_UNIFIED_SETTINGS.environmentIdentificationMode,
@@ -2390,6 +2395,28 @@ export function GeneralSettingsPanel() {
                 updateSettings({ showSkillsInSlashMenu: Boolean(checked) })
               }
               aria-label="Show skills in slash menu"
+            />
+          }
+        />
+
+        <SettingsRow
+          {...searchableSetting("files-show-ignored")}
+          description="List files your version control ignores in the Files panel, such as local notes, .env files, and agent scratch folders. Ignored folders load when you expand them."
+          resetAction={
+            settings.filesShowIgnored !== DEFAULT_UNIFIED_SETTINGS.filesShowIgnored ? (
+              <SettingResetButton
+                label="show ignored files"
+                onClick={() =>
+                  updateSettings({ filesShowIgnored: DEFAULT_UNIFIED_SETTINGS.filesShowIgnored })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Switch
+              checked={settings.filesShowIgnored}
+              onCheckedChange={(checked) => updateSettings({ filesShowIgnored: Boolean(checked) })}
+              aria-label="Show ignored files"
             />
           }
         />
