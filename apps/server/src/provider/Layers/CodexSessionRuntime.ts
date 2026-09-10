@@ -645,6 +645,7 @@ export function buildTurnStartParams(input: {
   return decodeCodexTurnStartParamsWithCollaborationMode({
     threadId: input.threadId,
     input: turnInput,
+    summary: "auto",
     approvalPolicy: config.approvalPolicy,
     approvalsReviewer: config.approvalsReviewer,
     sandboxPolicy: runtimeModeToTurnSandboxPolicy(input.runtimeMode),

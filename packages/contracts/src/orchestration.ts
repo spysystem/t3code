@@ -488,7 +488,14 @@ export const OrchestrationProject = Schema.Struct({
 });
 export type OrchestrationProject = typeof OrchestrationProject.Type;
 
-export const OrchestrationMessageRole = Schema.Literals(["user", "assistant", "system"]);
+// Reasoning is stored normally but sent only to clients that request it in
+// thread snapshots/subscriptions; older clients reject unknown role literals.
+export const OrchestrationMessageRole = Schema.Literals([
+  "user",
+  "assistant",
+  "system",
+  "reasoning",
+]);
 export type OrchestrationMessageRole = typeof OrchestrationMessageRole.Type;
 
 export const OrchestrationMessage = Schema.Struct({
@@ -912,6 +919,8 @@ export type OrchestrationSubscribeShellInput = typeof OrchestrationSubscribeShel
 
 export const OrchestrationSubscribeThreadInput = Schema.Struct({
   threadId: ThreadId,
+  /** Opt in only when the client understands the reasoning message role. */
+  includeReasoning: Schema.optionalKey(Schema.Boolean),
   /**
    * When provided, the server skips the initial snapshot frame and instead
    * replays events after this sequence before streaming live events. Clients
@@ -1394,7 +1403,7 @@ const ThreadSessionSetCommand = Schema.Struct({
 });
 
 const ThreadMessageAssistantDeltaCommand = Schema.Struct({
-  type: Schema.Literal("thread.message.assistant.delta"),
+  type: Schema.Literals(["thread.message.assistant.delta", "thread.message.reasoning.delta"]),
   commandId: CommandId,
   threadId: ThreadId,
   messageId: MessageId,
@@ -1404,10 +1413,11 @@ const ThreadMessageAssistantDeltaCommand = Schema.Struct({
 });
 
 const ThreadMessageAssistantCompleteCommand = Schema.Struct({
-  type: Schema.Literal("thread.message.assistant.complete"),
+  type: Schema.Literals(["thread.message.assistant.complete", "thread.message.reasoning.complete"]),
   commandId: CommandId,
   threadId: ThreadId,
   messageId: MessageId,
+  text: Schema.optional(Schema.String),
   turnId: Schema.optional(TurnId),
   createdAt: IsoDateTime,
 });
