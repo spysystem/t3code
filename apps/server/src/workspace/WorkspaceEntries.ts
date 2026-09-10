@@ -300,25 +300,27 @@ export const make = Effect.gen(function* () {
             const directory = await NodeFSP.realpath(target.absolutePath);
             const relative = path.relative(root, directory);
             if (
-              relative === ".." ||
-              relative.startsWith(`..${path.sep}`) ||
-              path.isAbsolute(relative) ||
               relative.split(path.sep).includes(".git") ||
               target.relativePath.split("/").includes(".git")
             ) {
-              throw new Error("Directory must be inside the workspace and outside .git.");
+              throw new Error("Directory must be outside .git.");
             }
             const children = await NodeFSP.readdir(directory, { withFileTypes: true });
+            const entries: ProjectEntry[] = [];
+            for (const child of children) {
+              if (child.name === ".git") continue;
+              // Workspace links may point at external notes folders, just like file reads.
+              const info = child.isSymbolicLink()
+                ? await NodeFSP.stat(path.join(directory, child.name)).catch(() => undefined)
+                : child;
+              if (!info || (!info.isDirectory() && !info.isFile())) continue;
+              entries.push({
+                path: target.relativePath ? `${target.relativePath}/${child.name}` : child.name,
+                kind: info.isDirectory() ? "directory" : "file",
+              });
+            }
             return {
-              entries: children.flatMap((child): ProjectEntry[] => {
-                if (child.name === ".git" || (!child.isDirectory() && !child.isFile())) return [];
-                return [
-                  {
-                    path: target.relativePath ? `${target.relativePath}/${child.name}` : child.name,
-                    kind: child.isDirectory() ? "directory" : "file",
-                  },
-                ];
-              }),
+              entries,
               // Git refuses to classify paths beyond a symbolic link.
               throughSymlink: relative !== target.relativePath.split("/").join(path.sep),
             };
