@@ -257,6 +257,14 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["disk storage browser screenshots captures rotated logs cleanup retention"],
   },
   {
+    id: "thread-links",
+    title: "Thread links",
+    to: "/settings/threads",
+    searchTerms: [
+      "task ticket issue regex regular expression title link template capture project defaults",
+    ],
+  },
+  {
     id: "project-defaults",
     title: "Project defaults and overrides",
     to: "/settings/threads",

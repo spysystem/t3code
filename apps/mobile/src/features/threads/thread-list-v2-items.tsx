@@ -81,6 +81,7 @@ import { ThreadSearchMatchExcerpt } from "./thread-search-match";
 import { useScaledTextRole } from "../settings/appearance/useScaledTextRole";
 import { PullRequestGlyph } from "../pull-requests/pullRequestGlyphs";
 import { pullRequestStatus } from "../pull-requests/pullRequestStatus";
+import { ThreadLink, threadLinkAccessibilityProps, useThreadLink } from "./thread-link";
 
 interface StatusLabel {
   readonly label: string;
@@ -680,6 +681,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   const handleOpenPullRequests = useCallback(() => {
     if (pr) onOpenThreadPullRequests(thread, pr);
   }, [onOpenThreadPullRequests, pr, thread]);
+  const taskLink = useThreadLink(thread);
 
   const theme = useUniwindTheme();
   const sidebarPane = props.pane === "sidebar";
@@ -1256,6 +1258,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
             </Text>
           </Pressable>
         ) : null}
+        {taskLink ? <ThreadLink task={taskLink} selected={selected} /> : null}
         {providerInstance ? (
           <View className="flex-row items-center">
             {providerDrivers.slice(0, -1).map(
@@ -1297,6 +1300,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
         interactionOpacity={rowAppearance.interactionOpacity}
         className={rowAppearance.className}
         accessibilityHint={swipeAccessibilityHint}
+        {...threadLinkAccessibilityProps(taskLink)}
         accessibilityLabel={rowAccessibilityLabel}
         accessibilityRole="button"
         accessibilityState={{ selected }}
@@ -1328,6 +1332,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
         interactionClassName={rowAppearance.interactionClassName}
         interactionOpacity={rowAppearance.interactionOpacity}
         accessibilityHint={swipeAccessibilityHint}
+        {...threadLinkAccessibilityProps(taskLink)}
         accessibilityLabel={rowAccessibilityLabel}
         accessibilityRole="button"
         accessibilityState={{ selected }}
@@ -1380,6 +1385,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
             ) : null}
           </View>
           {props.hasQueuedMessages ? <QueuedMessageIcon selected={selected} /> : null}
+          {taskLink ? <ThreadLink task={taskLink} selected={selected} /> : null}
           <Text
             className={cn(
               "text-sm tabular-nums",
