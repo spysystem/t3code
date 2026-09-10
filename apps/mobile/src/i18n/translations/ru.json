@@ -5767,5 +5767,8 @@
   "1a1beecff68a6e61": "Подтвердить аккаунт Google",
   "99451a5d2d40440f": "Отозван: {by}.",
   "3ee30a50b70fffab": "Отозван ({by}): {reason}",
-  "201490988858b511": "отозван: {by}"
+  "201490988858b511": "отозван: {by}",
+  "50409c456e7ebe55": "Open {name} {match}",
+  "e0fcb9eb90aa21b2": "Unable to open link",
+  "067aed7fd2680fe1": "The thread link could not be opened."
 }

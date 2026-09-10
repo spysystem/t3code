@@ -12987,5 +12987,40 @@
   "4f563dd87bd6f192": "Download and install it manually.",
   "9c1cbc184f9f6e4f": "Checks GitHub for SPY releases. Installation is manual.",
   "4187c9c24def9c63": "Could not switch to {track}",
-  "d516d22d499f7606": "Nightly follows upstream's nightly builds. A switch installs the next newer build on that track, so moving to Stable waits for its next release."
+  "d516d22d499f7606": "Nightly follows upstream's nightly builds. A switch installs the next newer build on that track, so moving to Stable waits for its next release.",
+  "50409c456e7ebe55": "Open {name} {match}",
+  "5c4683aaf69c8802": "Thread links",
+  "d81819d0bf430869": "task ticket issue regex regular expression title link template capture project defaults",
+  "f4c879a67cad6656": "Thread links not saved",
+  "6c1da1b3374e89d2": "Thread links not saved on every environment",
+  "8861139af3b19587": "Could not update {environments}. Other selected environments may have saved the change.",
+  "167bc7c63f321b55": "The first matching title pattern adds a link to the thread. Environment defaults apply to projects that inherit them.",
+  "36935f3d4afe51be": "Replace selected rules",
+  "c3ff258156672e87": "Configure links",
+  "8a73de54689d8a77": "No thread links configured.",
+  "69975de09d01e363": "Use a regular expression without / delimiters. In the URL, {match} inserts the whole match; {first}, {second} insert capture groups. Matched values are URL-encoded. An empty list disables links.",
+  "8e755231b5901b90": "Rule {number}",
+  "77d3803da6f73c0a": "Move rule {number} up",
+  "c15224f445febd0f": "Move rule {number} down",
+  "3752120a6fbaca21": "Remove rule {number}",
+  "caaba3154aaea948": "Issue",
+  "c151115c0c943f96": "Fix issue #123",
+  "47f131c436c9abd3": "No matching link.",
+  "ad5c4adbe7ee9617": "Enter a sample title to preview the link.",
+  "eb563c3bca170400": "Save links",
+  "641bd9fa78eb83ff": [
+    "Update ",
+    {
+      "i": 1,
+      "k": "_gt_value_1",
+      "v": "v"
+    },
+    " to edit thread links with project settings."
+  ],
+  "58695764b07fd6bb": "Up",
+  "ba926bc86638daca": "Down",
+  "1384406d575b5788": "Title pattern",
+  "babab583995c0d91": "Link template",
+  "17894372adb439a9": "Add rule",
+  "5c0c5547b5e99887": "Sample thread title"
 }
