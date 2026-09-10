@@ -13,6 +13,7 @@ import { createModelSelection } from "./model.ts";
 import { resolveProjectScripts, projectScriptsInheritDefaults } from "./projectScripts.ts";
 import {
   applyServerSettingsPatch,
+  migrateThreadLinkOverrides,
   isModelSelectionProviderEnabled,
   parsePersistedServerObservabilitySettings,
   resolveSourceControlWriterModelSelection,
@@ -24,6 +25,59 @@ import {
 const FOLDED_SERVER_SETTINGS = { ...DEFAULT_SERVER_SETTINGS, projectSettingsFolded: true };
 
 describe("serverSettings helpers", () => {
+  it("migrates saved thread links after the upstream fold and honors canonical overrides", () => {
+    const rules = [{ name: "Issue", pattern: "#(\\d+)", urlTemplate: "https://example.com/{1}" }];
+    const migrated = migrateThreadLinkOverrides({
+      ...FOLDED_SERVER_SETTINGS,
+      projectThreadLinkOverrides: {
+        [ProjectId.make("legacy")]: rules,
+        [ProjectId.make("disabled")]: [],
+        [ProjectId.make("canonical")]: rules,
+      },
+      projectSettingsOverrides: {
+        [ProjectId.make("legacy")]: { defaultAutoPull: true },
+        [ProjectId.make("canonical")]: { defaultThreadLinkRules: [] },
+      },
+    });
+    expect(migrated.projectSettingsOverrides).toEqual({
+      [ProjectId.make("legacy")]: { defaultAutoPull: true, defaultThreadLinkRules: rules },
+      [ProjectId.make("disabled")]: { defaultThreadLinkRules: [] },
+      [ProjectId.make("canonical")]: { defaultThreadLinkRules: [] },
+    });
+    expect(migrated.projectThreadLinkOverrides).toEqual({
+      [ProjectId.make("legacy")]: rules,
+      [ProjectId.make("disabled")]: [],
+      [ProjectId.make("canonical")]: [],
+    });
+    expect(migrateThreadLinkOverrides(migrated)).toBe(migrated);
+
+    const reset = applyServerSettingsPatch(migrated, {
+      projectSettingsOverrides: {
+        [ProjectId.make("legacy")]: { defaultAutoPull: true },
+        [ProjectId.make("disabled")]: null,
+      },
+    });
+    expect(migrateThreadLinkOverrides(reset).projectSettingsOverrides).toEqual({
+      [ProjectId.make("legacy")]: { defaultAutoPull: true },
+      [ProjectId.make("canonical")]: { defaultThreadLinkRules: [] },
+    });
+    expect(reset.projectThreadLinkOverrides).toEqual({ [ProjectId.make("canonical")]: [] });
+
+    const legacyEdit = applyServerSettingsPatch(reset, {
+      projectThreadLinkOverrides: { [ProjectId.make("legacy")]: rules },
+    });
+    expect(legacyEdit.projectSettingsOverrides[ProjectId.make("legacy")]).toEqual({
+      defaultAutoPull: true,
+      defaultThreadLinkRules: rules,
+    });
+    const legacyReset = applyServerSettingsPatch(legacyEdit, {
+      projectThreadLinkOverrides: { [ProjectId.make("legacy")]: null },
+    });
+    expect(legacyReset.projectSettingsOverrides[ProjectId.make("legacy")]).toEqual({
+      defaultAutoPull: true,
+    });
+  });
+
   it("replaces SSH host lists when saving, editing, and removing hosts", () => {
     const host = { id: "mini", label: "Mac mini", target: "mini" };
     const saved = applyServerSettingsPatch(DEFAULT_SERVER_SETTINGS, { deviceHosts: [host] });
@@ -32,6 +86,31 @@ describe("serverSettings helpers", () => {
     const edited = applyServerSettingsPatch(saved, { deviceHosts: [replacement] });
     expect(edited.deviceHosts).toEqual([replacement]);
     expect(applyServerSettingsPatch(edited, { deviceHosts: [] }).deviceHosts).toEqual([]);
+  });
+
+  it("replaces thread-link lists, preserves other projects, and removes overrides on reset", () => {
+    const first = ProjectId.make("first");
+    const second = ProjectId.make("second");
+    const rule = { name: "Issue", pattern: "#(\\d+)", urlTemplate: "https://tracker.example/{1}" };
+    const initial = applyServerSettingsPatch(DEFAULT_SERVER_SETTINGS, {
+      defaultThreadLinkRules: [rule, { ...rule, name: "Other" }],
+      projectThreadLinkOverrides: { [first]: [rule], [second]: [rule] },
+    });
+    const changed = applyServerSettingsPatch(initial, {
+      defaultThreadLinkRules: [rule],
+      projectThreadLinkOverrides: { [first]: [] },
+    });
+    expect(changed.defaultThreadLinkRules).toEqual([rule]);
+    expect(changed.projectThreadLinkOverrides[first]).toEqual([]);
+    expect(changed.projectThreadLinkOverrides[second]).toEqual([rule]);
+    const reset = applyServerSettingsPatch(changed, {
+      defaultThreadLinkRules: [],
+      projectThreadLinkOverrides: { [first]: null },
+    });
+    expect(reset.defaultThreadLinkRules).toEqual([]);
+    expect(reset.projectThreadLinkOverrides[first]).toBeUndefined();
+    expect(reset.projectThreadLinkOverrides[second]).toEqual([rule]);
+    expect(initial.projectThreadLinkOverrides[first]).toEqual([rule]);
   });
 
   it("inherits actions, preserves existing actions, and supports empty overrides and reset", () => {
