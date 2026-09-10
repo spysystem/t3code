@@ -34,6 +34,31 @@ describe("serverSettings helpers", () => {
     expect(applyServerSettingsPatch(edited, { deviceHosts: [] }).deviceHosts).toEqual([]);
   });
 
+  it("replaces thread-link lists, preserves other projects, and removes overrides on reset", () => {
+    const first = ProjectId.make("first");
+    const second = ProjectId.make("second");
+    const rule = { name: "Issue", pattern: "#(\\d+)", urlTemplate: "https://tracker.example/{1}" };
+    const initial = applyServerSettingsPatch(DEFAULT_SERVER_SETTINGS, {
+      defaultThreadLinkRules: [rule, { ...rule, name: "Other" }],
+      projectThreadLinkOverrides: { [first]: [rule], [second]: [rule] },
+    });
+    const changed = applyServerSettingsPatch(initial, {
+      defaultThreadLinkRules: [rule],
+      projectThreadLinkOverrides: { [first]: [] },
+    });
+    expect(changed.defaultThreadLinkRules).toEqual([rule]);
+    expect(changed.projectThreadLinkOverrides[first]).toEqual([]);
+    expect(changed.projectThreadLinkOverrides[second]).toEqual([rule]);
+    const reset = applyServerSettingsPatch(changed, {
+      defaultThreadLinkRules: [],
+      projectThreadLinkOverrides: { [first]: null },
+    });
+    expect(reset.defaultThreadLinkRules).toEqual([]);
+    expect(reset.projectThreadLinkOverrides[first]).toBeUndefined();
+    expect(reset.projectThreadLinkOverrides[second]).toEqual([rule]);
+    expect(initial.projectThreadLinkOverrides[first]).toEqual([rule]);
+  });
+
   it("inherits actions, preserves existing actions, and supports empty overrides and reset", () => {
     const project = { id: ProjectId.make("project-actions"), scripts: [] };
     const action = {

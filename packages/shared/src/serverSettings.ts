@@ -280,6 +280,7 @@ export function applyServerSettingsPatch(
     projectAgentBrowserAccessOverrides: _legacyBrowserAccess,
     projectAutoPullOverrides: _legacyAutoPull,
     projectScriptOverrides: _legacyScripts,
+    projectThreadLinkOverrides: projectThreadLinkOverridesPatch,
     ...patchForMerge
   } = patch;
   const currentBackgroundActivity = normalizeServerBackgroundActivitySettings(current);
@@ -347,6 +348,17 @@ export function applyServerSettingsPatch(
       : {}),
     ...(patch.defaultModelSelection !== undefined
       ? { defaultModelSelection: patch.defaultModelSelection }
+      : {}),
+    ...(patch.defaultThreadLinkRules !== undefined
+      ? { defaultThreadLinkRules: patch.defaultThreadLinkRules }
+      : {}),
+    ...(projectThreadLinkOverridesPatch !== undefined
+      ? {
+          projectThreadLinkOverrides: mergeSettingsEntries(
+            current.projectThreadLinkOverrides,
+            projectThreadLinkOverridesPatch,
+          ),
+        }
       : {}),
     ...(patch.defaultProjectScripts !== undefined
       ? { defaultProjectScripts: patch.defaultProjectScripts }
