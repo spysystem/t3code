@@ -106,6 +106,10 @@ Show skills in slash menu**. Only skills enabled for the provider are listed.
 Provider commands must start the message to run. T3 Code commands such as
 `/model` and `/plan`, and skill mentions, work on any line.
 
+With Cursor, Codex, or Claude, ask the agent to rename the current thread, or use
+a skill that assigns a title to the task. Skills written for Cursor's
+`rename_chat` can also rename the thread in T3 Code.
+
 Send `/compact` in an existing conversation to reduce context usage when the
 provider supports it. Web and desktop also offer compaction from the context meter.
 
