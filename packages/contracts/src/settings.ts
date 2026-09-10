@@ -433,6 +433,7 @@ export const ClientSettingsSchema = Schema.Struct({
   composerCollapseOnScroll: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   proactivePanelsEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   showSkillsInSlashMenu: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
+  showThinking: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
   // Files panel: also list VCS-ignored paths (local notes, .env, agent
   // scratch folders). Off by default so the tree stays focused on the repo.
   filesShowIgnored: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(false))),
@@ -1504,6 +1505,7 @@ export const ClientSettingsPatch = Schema.Struct({
   composerCollapseOnScroll: Schema.optionalKey(Schema.Boolean),
   proactivePanelsEnabled: Schema.optionalKey(Schema.Boolean),
   showSkillsInSlashMenu: Schema.optionalKey(Schema.Boolean),
+  showThinking: Schema.optionalKey(Schema.Boolean),
   filesShowIgnored: Schema.optionalKey(Schema.Boolean),
   legacySidebarEnabled: Schema.optionalKey(Schema.Boolean),
   compactSidebarEnabled: Schema.optionalKey(Schema.Boolean),

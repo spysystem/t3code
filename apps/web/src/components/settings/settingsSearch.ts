@@ -298,6 +298,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["command menu dollar $ slash /"],
   },
   {
+    id: "show-thinking",
+    title: "Show thinking",
+    to: "/settings/general",
+    searchTerms: ["reasoning thought summary live history collapsible"],
+  },
+  {
     id: "files-show-ignored",
     title: "Show ignored files",
     to: "/settings/general",
