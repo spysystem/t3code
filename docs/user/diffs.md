@@ -21,6 +21,7 @@ Open files from agent file links, the file picker, or the Diff pane to read or e
 
 - Supports syntax-highlighted code/JSON, rendered and raw views for Markdown, HTML, CSV, and TSV, PDF previews, and ZIP browsing up to 50 MB.
 - Files outside the workspace open read-only.
+- Folders linked from your project to an external notes vault or synced drive can be browsed in the Files panel and their files opened. Showing a file there does not add it to Git.
 
 ## Inline review comments
 
