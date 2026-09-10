@@ -1190,6 +1190,39 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
     }),
   );
 
+  it.effect("keeps completed reasoning summaries with their section boundaries", () =>
+    Effect.gen(function* () {
+      const { adapter, runtime } = yield* startLifecycleRuntime();
+      const eventFiber = yield* Stream.runHead(adapter.streamEvents).pipe(Effect.forkChild);
+      yield* runtime.emit({
+        id: asEventId("evt-reasoning-complete"),
+        kind: "notification",
+        provider: ProviderDriverKind.make("codex"),
+        createdAt: "2026-01-01T00:00:00.000Z",
+        method: "item/completed",
+        threadId: asThreadId("thread-1"),
+        turnId: asTurnId("turn-1"),
+        itemId: asItemId("reasoning-1"),
+        payload: {
+          completedAtMs: 1_778_000_000_000,
+          threadId: "thread-1",
+          turnId: "turn-1",
+          item: {
+            type: "reasoning",
+            id: "reasoning-1",
+            summary: ["Compare options.", "Choose the simplest."],
+            content: [],
+          },
+        },
+      });
+      const event = Option.getOrThrow(yield* Fiber.join(eventFiber));
+      NodeAssert.equal(event.type, "item.completed");
+      if (event.type !== "item.completed") return;
+      NodeAssert.equal(event.payload.itemType, "reasoning");
+      NodeAssert.equal(event.payload.detail, "Compare options.\n\nChoose the simplest.");
+    }),
+  );
+
   it.effect("maps completed agent message items to canonical item.completed events", () =>
     Effect.gen(function* () {
       const { adapter, runtime } = yield* startLifecycleRuntime();

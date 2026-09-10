@@ -8308,6 +8308,108 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
+  for (const includeReasoning of [false, true]) {
+    it.effect(
+      `keeps reasoning wire data compatible when includeReasoning is ${includeReasoning}`,
+      () =>
+        Effect.gen(function* () {
+          const message = {
+            id: MessageId.make("thinking-compatibility"),
+            role: "reasoning" as const,
+            text: "Compare approaches.",
+            turnId: TurnId.make("thinking-turn"),
+            streaming: false,
+            createdAt: "2026-01-01T00:00:00.000Z",
+            updatedAt: "2026-01-01T00:00:01.000Z",
+          };
+          const thread = {
+            ...makeDefaultOrchestrationReadModel().threads[0]!,
+            messages: [message],
+          };
+          const event: OrchestrationEvent = {
+            ...makeLiveToolActivityEvent(2, "tool.completed"),
+            type: "thread.message-sent",
+            payload: {
+              threadId: thread.id,
+              messageId: message.id,
+              role: message.role,
+              text: message.text,
+              turnId: message.turnId,
+              streaming: false,
+              createdAt: message.createdAt,
+              updatedAt: message.updatedAt,
+            },
+          };
+          yield* buildAppUnderTest({
+            layers: {
+              orchestrationEngine: {
+                streamDomainEvents: Stream.concat(Stream.make(event), Stream.never),
+                latestSequence: Effect.succeed(2),
+                getThreadReplayStats: () =>
+                  Effect.succeed({ eventCount: 1, payloadBytes: 200, hasCreateEvent: false }),
+                readThreadEvents: () => Stream.make(event),
+              },
+              projectionSnapshotQuery: {
+                getThreadDetailSnapshot: () =>
+                  Effect.succeed(Option.some({ snapshotSequence: 1, thread })),
+              },
+            },
+          });
+          const response = yield* fetchEffect(
+            yield* getHttpServerUrl(
+              `/api/orchestration/threads/${thread.id}${includeReasoning ? "?includeReasoning=true" : ""}`,
+            ),
+            { headers: { cookie: yield* getAuthenticatedSessionCookieHeader() } },
+          );
+          assert.equal(response.status, 200);
+          const snapshot = yield* responseJsonEffect<{
+            thread: { messages: ReadonlyArray<{ role: string }> };
+          }>(response);
+          assert.deepEqual(
+            snapshot.thread.messages.map((entry) => entry.role),
+            includeReasoning ? ["reasoning"] : [],
+          );
+          const wsUrl = yield* getWsServerUrl("/ws");
+          for (const afterSequence of [undefined, 1]) {
+            const items = yield* Effect.scoped(
+              withWsRpcClient(wsUrl, (client) =>
+                client[ORCHESTRATION_WS_METHODS.subscribeThread]({
+                  threadId: thread.id,
+                  ...(includeReasoning ? { includeReasoning: true } : {}),
+                  ...(afterSequence === undefined ? {} : { afterSequence }),
+                  requestCompletionMarker: true,
+                }).pipe(
+                  Stream.takeUntil((item) => item.kind === "synchronized"),
+                  Stream.runCollect,
+                ),
+              ),
+            );
+            if (afterSequence === undefined) {
+              const first = items[0];
+              assertTrue(first?.kind === "snapshot");
+              assert.deepEqual(
+                first.snapshot.thread.messages.map((entry) => entry.role),
+                includeReasoning ? ["reasoning"] : [],
+              );
+            }
+            const update = items.find((item) => item.kind === "event");
+            assertTrue(update?.kind === "event");
+            assert.equal(update.event.sequence, 2);
+            assert.equal(
+              update.event.type,
+              includeReasoning ? "thread.message-sent" : "thread.meta-updated",
+            );
+            assert.deepEqual(
+              update.event.payload,
+              includeReasoning
+                ? event.payload
+                : { threadId: thread.id, updatedAt: message.updatedAt },
+            );
+          }
+        }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+    );
+  }
+
   it.effect("marks a socket thread snapshot as synchronized when requested", () =>
     Effect.gen(function* () {
       const thread = makeDefaultOrchestrationReadModel().threads[0]!;
