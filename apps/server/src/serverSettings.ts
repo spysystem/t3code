@@ -52,6 +52,7 @@ import {
   applyServerSettingsPatch,
   deriveLegacyProjectOverrides,
   fallbackTextGenerationModelSelection,
+  migrateThreadLinkOverrides,
   isModelSelectionProviderEnabled,
 } from "@t3tools/shared/serverSettings";
 import * as ServerSecretStore from "./auth/ServerSecretStore.ts";
@@ -128,6 +129,7 @@ const normalizeServerSettings = (
     Effect.flatMap(decodeServerSettings),
     Effect.map(foldProviderInstanceEnabledFlags),
     Effect.map((next) => withIdleCompaction(next, globalIdleCompaction(next))),
+    Effect.map(migrateThreadLinkOverrides),
     Effect.map((next) => ({ ...next, ...deriveLegacyProjectOverrides(next) })),
     Effect.mapError(
       (cause) =>
@@ -883,7 +885,7 @@ const make = Effect.gen(function* () {
         : migrateLegacyProviderSettings(settings, legacyProviders, providerHistory),
     );
     const folded = settingsFileTrusted
-      ? foldLegacyProjectSettings(loaded, legacyProjectRows)
+      ? foldLegacyProjectSettings(migrateThreadLinkOverrides(loaded), legacyProjectRows)
       : loaded;
     // Remove retired keys only after copying secrets and writing the new file; failures retry on next load.
     const legacySecretsCopied = yield* Effect.forEach(
