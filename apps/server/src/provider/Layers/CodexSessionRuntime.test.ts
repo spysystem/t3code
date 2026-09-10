@@ -193,6 +193,7 @@ describe("buildTurnStartParams", () => {
     );
 
     NodeAssert.deepStrictEqual(params, {
+      summary: "auto",
       threadId: "provider-thread-1",
       approvalPolicy: "never",
       approvalsReviewer: "user",
@@ -239,6 +240,7 @@ describe("buildTurnStartParams", () => {
     );
 
     NodeAssert.deepStrictEqual(params, {
+      summary: "auto",
       threadId: "provider-thread-1",
       approvalPolicy: "on-request",
       approvalsReviewer: "user",
@@ -295,6 +297,7 @@ describe("buildTurnStartParams", () => {
       });
 
       NodeAssert.deepStrictEqual(params, {
+        summary: "auto",
         threadId: "provider-thread-1",
         approvalPolicy: "on-request",
         approvalsReviewer: "auto_review",
@@ -321,6 +324,7 @@ describe("buildTurnStartParams", () => {
     );
 
     NodeAssert.deepStrictEqual(params, {
+      summary: "auto",
       threadId: "provider-thread-1",
       approvalPolicy: "untrusted",
       approvalsReviewer: "user",
