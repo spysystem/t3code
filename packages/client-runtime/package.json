@@ -478,6 +478,10 @@
     "./model-traits": {
       "types": "./src/modelTraits.ts",
       "default": "./src/modelTraits.ts"
+    },
+    "./thread-links": {
+      "types": "./src/threadLinks.ts",
+      "default": "./src/threadLinks.ts"
     }
   },
   "scripts": {
