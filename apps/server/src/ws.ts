@@ -86,6 +86,7 @@ import * as Keybindings from "./keybindings.ts";
 import * as ExternalLauncher from "./process/externalLauncher.ts";
 import {
   projectActivityEvent,
+  projectThreadReasoningEvent,
   projectThreadDetailSnapshot,
 } from "./orchestration/ActivityPayloadProjection.ts";
 import { makeThreadLiveEventCoalescer } from "./orchestration/ThreadLiveEventCoalescer.ts";
@@ -1652,7 +1653,7 @@ const makeWsRpcLayer = (
                 Stream.filter(isThisThreadDetailEvent),
                 Stream.map((event) => ({
                   kind: "event" as const,
-                  event,
+                  event: projectThreadReasoningEvent(event, input.includeReasoning),
                 })),
               );
 
@@ -1722,7 +1723,10 @@ const makeWsRpcLayer = (
                       Stream.filter(isThisThreadDetailEvent),
                       Stream.map((event) => ({
                         kind: "event" as const,
-                        event: projectActivityEvent(event),
+                        event: projectThreadReasoningEvent(
+                          projectActivityEvent(event),
+                          input.includeReasoning,
+                        ),
                       })),
                       Stream.mapError(
                         (cause) =>
@@ -1793,7 +1797,7 @@ const makeWsRpcLayer = (
               return Stream.concat(
                 Stream.make({
                   kind: "snapshot" as const,
-                  snapshot: projectThreadDetailSnapshot(snapshot.value),
+                  snapshot: projectThreadDetailSnapshot(snapshot.value, input.includeReasoning),
                 }),
                 afterSnapshot,
               );

@@ -54,6 +54,7 @@ export const fetchEnvironmentThreadSnapshot = Effect.fn(
       client.threadSnapshot({
         params: { threadId: input.threadId },
         payload: {
+          includeReasoning: "true",
           ...(input.window !== undefined ? { turnLimit: input.window.turnLimit } : {}),
           ...(input.window?.beforeCursor !== undefined
             ? { beforeCursor: input.window.beforeCursor }
