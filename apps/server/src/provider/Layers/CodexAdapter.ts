@@ -769,6 +769,9 @@ function itemTitle(
 }
 
 function itemDetail(itemType: CanonicalItemType, item: CodexLifecycleItem): string | undefined {
+  if (item.type === "reasoning") {
+    return item.summary?.join("\n\n") || item.content?.join("\n\n") || undefined;
+  }
   const itemRecord = item as Record<string, unknown>;
   const action = itemRecord.action as Record<string, unknown> | undefined;
   const actionQueries = Array.isArray(action?.queries) ? action.queries : [];

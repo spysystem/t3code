@@ -2,6 +2,16 @@ import { describe, expect, it } from "vite-plus/test";
 import { formatThreadTitleContext, limitTitleMessage } from "./ThreadTitleContext.ts";
 
 describe("thread title context", () => {
+  it("excludes saved thinking without marking visible conversation context as truncated", () => {
+    expect(
+      formatThreadTitleContext([
+        { role: "user", text: "Fix pairing" },
+        { role: "reasoning", text: "Explore unrelated hypotheses. ".repeat(2_000) },
+        { role: "assistant", text: "The QR token expired." },
+      ]).message,
+    ).toBe("USER:\nFix pairing\n\nASSISTANT:\nThe QR token expired.");
+  });
+
   it("keeps a user's scope change despite long assistant output", () => {
     const result = formatThreadTitleContext([
       { role: "user", text: "Review QR sharing" },
