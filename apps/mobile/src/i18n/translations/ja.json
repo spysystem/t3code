@@ -5677,5 +5677,8 @@
   "99451a5d2d40440f": "{by} が取り下げました。",
   "3ee30a50b70fffab": "{by} が取り下げました: {reason}",
   "201490988858b511": "{by} が取り下げ",
-  "46d614fa7b4bf1e5": "ワークフローの実行"
+  "46d614fa7b4bf1e5": "ワークフローの実行",
+  "50409c456e7ebe55": "Open {name} {match}",
+  "e0fcb9eb90aa21b2": "Unable to open link",
+  "067aed7fd2680fe1": "The thread link could not be opened."
 }
