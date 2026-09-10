@@ -2280,6 +2280,51 @@ describe("buildThreadFeed", () => {
     },
   );
 
+  it("keeps explicit reasoning, including textless phases, without a duplicate busy row", () => {
+    const turnId = TurnId.make("turn-thinking");
+    const latestTurn = {
+      turnId,
+      state: "running" as const,
+      requestedAt: "2026-04-01T00:00:00Z",
+      startedAt: "2026-04-01T00:00:00Z",
+      completedAt: null,
+      assistantMessageId: null,
+    };
+    const message = {
+      id: MessageId.make("reasoning-1"),
+      role: "reasoning" as const,
+      text: "",
+      turnId,
+      streaming: true,
+      createdAt: latestTurn.startedAt,
+      updatedAt: latestTurn.startedAt,
+    };
+    const thread = makeThread({
+      id: ThreadId.make("thread-thinking"),
+      projectId: ProjectId.make("project-1"),
+      title: "Thinking",
+      latestTurn,
+      messages: [message],
+    });
+    const liveFeed = buildThreadFeed(thread);
+    expect(
+      deriveThreadFeedPresentation(
+        liveFeed,
+        latestTurn,
+        new Set(),
+        new Set(),
+        latestTurn.startedAt,
+      ).map((entry) => entry.type),
+    ).toEqual(["message"]);
+    const completedFeed = buildThreadFeed({
+      ...thread,
+      messages: [{ ...message, streaming: false }],
+    });
+    expect(deriveThreadFeedPresentation(completedFeed, null, new Set())).toMatchObject([
+      { type: "message", message: { role: "reasoning", streaming: false } },
+    ]);
+  });
+
   it("shows one Thinking row while a turn works without live tool activity", () => {
     const turnId = TurnId.make("turn-thinking");
     const latestTurn = {

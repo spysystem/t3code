@@ -300,6 +300,7 @@ describe("thread pagination state", () => {
       expect(windows[0]?.turnLimit).toBe(INITIAL_THREAD_USER_TURN_LIMIT);
       const subscribeInput = yield* Ref.get(harness.lastSubscribeInput);
       expect(subscribeInput?.turnLimit).toBe(INITIAL_THREAD_USER_TURN_LIMIT);
+      expect(subscribeInput?.includeReasoning).toBe(true);
     }),
   );
 
