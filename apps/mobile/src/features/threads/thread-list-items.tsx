@@ -29,6 +29,7 @@ import { buildThreadTitleRegenerationMenuItems } from "./thread-title-regenerati
 import { QueuedMessageIcon } from "./queued-message-icon";
 import { resolveThreadStatus } from "./threadPresentation";
 import { ThreadSearchMatchExcerpt } from "./thread-search-match";
+import { ThreadLink, threadLinkAccessibilityProps, useThreadLink } from "./thread-link";
 
 /**
  * Shared presentation for the thread lists: the compact (phone) Home list and
@@ -492,6 +493,7 @@ export const ThreadListRow = memo(function ThreadListRow(props: {
   } = props;
   const status = resolveThreadStatus(thread);
   const pr = useThreadPr(thread);
+  const taskLink = useThreadLink(thread);
   const timestamp = relativeTime(
     thread.latestUserMessageAt ?? thread.updatedAt ?? thread.createdAt,
   );
@@ -584,7 +586,7 @@ export const ThreadListRow = memo(function ThreadListRow(props: {
   ) : null;
 
   const subtitleRow =
-    subtitleParts.length > 0 || pr !== null ? (
+    subtitleParts.length > 0 || pr !== null || taskLink !== null ? (
       <View className="mt-px flex-row items-center gap-1.5">
         {subtitleParts.length > 0 ? (
           <>
@@ -657,6 +659,9 @@ export const ThreadListRow = memo(function ThreadListRow(props: {
             </Text>
           </View>
         ) : null}
+        {taskLink ? (
+          <ThreadLink task={taskLink} compact={compact} selected={visuallySelected} />
+        ) : null}
       </View>
     ) : null;
 
@@ -672,6 +677,7 @@ export const ThreadListRow = memo(function ThreadListRow(props: {
             : "bg-primary"
         }
         accessibilityHint="Swipe left for archive and delete actions"
+        {...threadLinkAccessibilityProps(taskLink)}
         accessibilityLabel={threadAccessibilityLabel}
         accessibilityRole="button"
         className="bg-screen"
@@ -752,6 +758,7 @@ export const ThreadListRow = memo(function ThreadListRow(props: {
             : "bg-primary"
         }
         accessibilityHint="Opens the thread"
+        {...threadLinkAccessibilityProps(taskLink)}
         accessibilityLabel={threadAccessibilityLabel}
         accessibilityRole="button"
         accessibilityState={{ selected }}
