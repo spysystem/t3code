@@ -1513,6 +1513,7 @@ const activityOrder = Order.combineAll<OrchestrationThreadActivity>([
 ]);
 
 function isEmptyMessage(entry: RawThreadFeedEntry): boolean {
+  if (entry.type === "message" && entry.message.role === "reasoning") return false;
   if (entry.type !== "message") {
     return false;
   }
@@ -1818,6 +1819,10 @@ export function deriveThreadFeedPresentation(
     activeWorkStartedAt !== null &&
     !result.some(
       (row) =>
+        (row.type === "message" &&
+          row.message.role === "reasoning" &&
+          row.message.streaming &&
+          row.message.turnId === unsettledTurnId) ||
         (row.type === "work-toggle" && row.shimmer) ||
         // A working spawn card is the live activity: its status line shows
         // what the agents are doing, so a Thinking row under it would lie.
