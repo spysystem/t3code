@@ -32,6 +32,7 @@ import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { PROJECT_GROUPING_MODE_LABELS } from "./ProjectSettingsPanel";
 import { ProjectDefaultActionsSettings } from "./ProjectDefaultActionsSettings";
+import { ThreadLinksSettings } from "./ThreadLinksSettings";
 import { searchableSetting } from "./settingsSearch";
 import {
   SETTINGS_PICKER_TRIGGER_CLASSNAME,
@@ -456,6 +457,7 @@ export function ProjectDefaultsSettings({
         />
       </SettingsSection>
       <ProjectDefaultActionsSettings environmentId={environmentId} />
+      <ThreadLinksSettings key={environmentId ?? "all"} environmentId={environmentId} />
       <SettingsSection title="Danger">
         <SettingsRow
           title="Remove project"

@@ -48,6 +48,7 @@ import {
 } from "../../hooks/useSettings";
 import { useT3ProjectFileState } from "../../hooks/useT3ProjectFileScripts";
 import { ProjectActionsList } from "./ProjectActionsList";
+import { ThreadLinksSettings } from "./ThreadLinksSettings";
 import { isElectron } from "../../env";
 import {
   decodeProjectScriptKeybindingRule,
@@ -1239,6 +1240,8 @@ function ProjectDetail({
             }
           />
         </SettingsSection>
+
+        <ThreadLinksSettings key={group.projectKey} projects={group.memberProjects} />
 
         <SettingsSection title="Checkout">
           {hasMultipleCheckouts ? (
