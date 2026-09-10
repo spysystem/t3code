@@ -10,7 +10,7 @@ import {
   resolveProviderInstanceEnabled,
   isProviderTextGenerationCapable,
   type ModelSelection,
-  type ProjectId,
+  ProjectId,
   type ProjectScopedServerSettingKey,
   type ProjectSettingsOverrides,
   ProviderDriverKind,
@@ -20,6 +20,7 @@ import {
   type ServerSettingsPatch,
 } from "@t3tools/contracts";
 import * as Option from "effect/Option";
+import * as Equal from "effect/Equal";
 import * as Schema from "effect/Schema";
 import { deepMerge } from "./Struct.ts";
 import { fromLenientJson } from "./schemaJson.ts";
@@ -288,11 +289,15 @@ export function deriveLegacyProjectOverrides(
   settings: Pick<ServerSettings, "projectSettingsOverrides">,
 ): Pick<
   ServerSettings,
-  "projectAgentBrowserAccessOverrides" | "projectAutoPullOverrides" | "projectScriptOverrides"
+  | "projectAgentBrowserAccessOverrides"
+  | "projectAutoPullOverrides"
+  | "projectScriptOverrides"
+  | "projectThreadLinkOverrides"
 > {
   const projectAgentBrowserAccessOverrides: Record<string, boolean> = {};
   const projectAutoPullOverrides: Record<string, boolean> = {};
   const projectScriptOverrides: Record<string, ServerSettings["defaultProjectScripts"] | null> = {};
+  const projectThreadLinkOverrides: Record<string, ServerSettings["defaultThreadLinkRules"]> = {};
   for (const [projectId, entry] of Object.entries(settings.projectSettingsOverrides)) {
     if (entry.enableAgentBrowserAccess !== undefined) {
       projectAgentBrowserAccessOverrides[projectId] = entry.enableAgentBrowserAccess;
@@ -303,8 +308,36 @@ export function deriveLegacyProjectOverrides(
     if (entry.defaultProjectScripts !== undefined) {
       projectScriptOverrides[projectId] = entry.defaultProjectScripts;
     }
+    if (entry.defaultThreadLinkRules !== undefined) {
+      projectThreadLinkOverrides[projectId] = entry.defaultThreadLinkRules;
+    }
   }
-  return { projectAgentBrowserAccessOverrides, projectAutoPullOverrides, projectScriptOverrides };
+  return {
+    projectAgentBrowserAccessOverrides,
+    projectAutoPullOverrides,
+    projectScriptOverrides,
+    projectThreadLinkOverrides,
+  };
+}
+
+/** Adopt saved fork rules even when upstream's earlier project-settings migration already ran. */
+export function migrateThreadLinkOverrides(settings: ServerSettings): ServerSettings {
+  let migrated: Record<string, ProjectSettingsOverrides> | undefined;
+  for (const [rawProjectId, rules] of Object.entries(settings.projectThreadLinkOverrides)) {
+    const projectId = ProjectId.make(rawProjectId);
+    const entry = settings.projectSettingsOverrides[projectId];
+    if (entry?.defaultThreadLinkRules !== undefined) continue;
+    migrated ??= { ...settings.projectSettingsOverrides };
+    migrated[projectId] = { ...entry, defaultThreadLinkRules: rules };
+  }
+  const projectSettingsOverrides = migrated ?? settings.projectSettingsOverrides;
+  const { projectThreadLinkOverrides } = deriveLegacyProjectOverrides({ projectSettingsOverrides });
+  if (
+    projectSettingsOverrides === settings.projectSettingsOverrides &&
+    Equal.equals(projectThreadLinkOverrides, settings.projectThreadLinkOverrides)
+  )
+    return settings;
+  return { ...settings, projectSettingsOverrides, projectThreadLinkOverrides };
 }
 
 function translateLegacyProjectOverridePatch(
@@ -315,12 +348,14 @@ function translateLegacyProjectOverridePatch(
     projectAgentBrowserAccessOverrides,
     projectAutoPullOverrides,
     projectScriptOverrides,
+    projectThreadLinkOverrides,
     ...rest
   } = patch;
   if (
     projectAgentBrowserAccessOverrides === undefined &&
     projectAutoPullOverrides === undefined &&
-    projectScriptOverrides === undefined
+    projectScriptOverrides === undefined &&
+    projectThreadLinkOverrides === undefined
   ) {
     return patch;
   }
@@ -353,6 +388,7 @@ function translateLegacyProjectOverridePatch(
   applyKey(projectAgentBrowserAccessOverrides, "enableAgentBrowserAccess");
   applyKey(projectAutoPullOverrides, "defaultAutoPull");
   applyKey(projectScriptOverrides, "defaultProjectScripts");
+  applyKey(projectThreadLinkOverrides, "defaultThreadLinkRules");
   return {
     ...rest,
     projectSettingsOverrides: Object.fromEntries(entries),
@@ -360,9 +396,10 @@ function translateLegacyProjectOverridePatch(
 }
 
 export function applyServerSettingsPatch(
-  current: ServerSettings,
+  rawCurrent: ServerSettings,
   rawPatch: ServerSettingsPatch,
 ): ServerSettings {
+  const current = migrateThreadLinkOverrides(rawCurrent);
   const patch = translateLegacyProjectOverridePatch(current, rawPatch);
   const selectionPatch = patch.textGenerationModelSelection;
   const {
@@ -386,6 +423,7 @@ export function applyServerSettingsPatch(
     projectAgentBrowserAccessOverrides: _legacyBrowserAccess,
     projectAutoPullOverrides: _legacyAutoPull,
     projectScriptOverrides: _legacyScripts,
+    projectThreadLinkOverrides: _legacyThreadLinks,
     ...patchForMerge
   } = patch;
   const currentBackgroundActivity = normalizeServerBackgroundActivitySettings(current);
@@ -554,6 +592,9 @@ export function applyServerSettingsPatch(
       : {}),
     ...(patch.defaultModelSelection !== undefined
       ? { defaultModelSelection: patch.defaultModelSelection }
+      : {}),
+    ...(patch.defaultThreadLinkRules !== undefined
+      ? { defaultThreadLinkRules: patch.defaultThreadLinkRules }
       : {}),
     ...(patch.defaultProjectScripts !== undefined
       ? { defaultProjectScripts: patch.defaultProjectScripts }
