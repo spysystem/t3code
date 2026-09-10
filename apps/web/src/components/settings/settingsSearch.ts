@@ -271,6 +271,14 @@ export const SETTINGS_SEARCH_ITEMS = [
     ],
   },
   {
+    id: "thread-links",
+    title: "Thread links",
+    to: "/settings/threads",
+    searchTerms: [
+      "task ticket issue regex regular expression title link template capture project defaults",
+    ],
+  },
+  {
     id: "project-defaults",
     title: "Project defaults and overrides",
     to: "/settings/threads",
