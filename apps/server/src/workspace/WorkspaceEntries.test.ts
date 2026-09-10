@@ -134,29 +134,33 @@ it.layer(TestLayer, { excludeTestServices: true })("WorkspaceEntries", (it) => {
       }),
     );
 
-    it.effect(
-      "rejects directory traversal, git internals, and symlinks outside the workspace",
-      () =>
-        Effect.gen(function* () {
-          const cwd = yield* makeTempDir();
-          const outside = yield* makeTempDir();
-          const fileSystem = yield* FileSystem.FileSystem;
-          const path = yield* Path.Path;
-          yield* writeTextFile(cwd, ".git/HEAD");
-          const platform = yield* HostProcessPlatform;
-          if (platform !== "win32") yield* fileSystem.symlink(outside, path.join(cwd, "external"));
-          const workspaceEntries = yield* WorkspaceEntries.WorkspaceEntries;
-          for (const directoryPath of [
-            "../",
+    it.effect("rejects directory traversal and git internals while allowing workspace links", () =>
+      Effect.gen(function* () {
+        const cwd = yield* makeTempDir();
+        const outside = yield* makeTempDir();
+        yield* writeTextFile(outside, "note.md");
+        const path = yield* Path.Path;
+        yield* writeTextFile(cwd, ".git/HEAD");
+        const platform = yield* HostProcessPlatform;
+        yield* Effect.promise(() =>
+          NodeFSP.symlink(
             outside,
-            ".git",
-            "missing",
-            ...(platform !== "win32" ? ["external"] : []),
-          ]) {
-            const error = yield* workspaceEntries.list({ cwd, directoryPath }).pipe(Effect.flip);
-            expect(error._tag).toBe("WorkspaceEntriesReadDirectoryError");
-          }
-        }),
+            path.join(cwd, "external"),
+            platform === "win32" ? "junction" : "dir",
+          ),
+        );
+        const workspaceEntries = yield* WorkspaceEntries.WorkspaceEntries;
+        for (const directoryPath of ["../", outside, ".git", "missing"]) {
+          const error = yield* workspaceEntries.list({ cwd, directoryPath }).pipe(Effect.flip);
+          expect(error._tag).toBe("WorkspaceEntriesReadDirectoryError");
+        }
+        expect(yield* workspaceEntries.list({ cwd, directoryPath: "external" })).toEqual({
+          entries: [{ path: "external/note.md", kind: "file" }],
+          truncated: false,
+        });
+        const root = yield* workspaceEntries.list({ cwd, directoryPath: "" });
+        expect(root.entries).toContainEqual({ path: "external", kind: "directory" });
+      }),
     );
 
     it.effect(
