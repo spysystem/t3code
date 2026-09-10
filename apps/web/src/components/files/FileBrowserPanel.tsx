@@ -25,6 +25,8 @@ import { createFileTreeDragMentionController } from "./fileTreeDragMention";
 import { areAllDirectoriesExpanded, setAllDirectoriesExpanded } from "./fileTreeExpansion";
 import { buildFileTreePathUpdates } from "./fileTreePathReconciliation";
 import { useDirectoryEntries } from "./useDirectoryEntries";
+import { selectFilesShowIgnored, visibleFileEntries } from "./ignoredEntries";
+import { useClientSettings } from "~/hooks/useSettings";
 import { useProjectPathSearch } from "~/state/queries";
 
 interface FileBrowserPanelProps {
@@ -105,6 +107,7 @@ export default function FileBrowserPanel({
 }: FileBrowserPanelProps) {
   const { resolvedTheme } = useTheme();
   const composerRef = useComposerHandleContext();
+  const showIgnored = useClientSettings(selectFilesShowIgnored);
   const {
     entries: directoryEntries,
     load,
@@ -128,8 +131,8 @@ export default function FileBrowserPanel({
         }
       }
     }
-    return [...result.values()];
-  }, [directoryEntries, pathSearch.entries, pathSearch.isPending, query]);
+    return visibleFileEntries([...result.values()], showIgnored);
+  }, [directoryEntries, pathSearch.entries, pathSearch.isPending, query, showIgnored]);
   const entryKinds = useMemo(
     () => new Map(entries.map((entry) => [entry.path, entry.kind] as const)),
     [entries],

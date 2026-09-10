@@ -18,6 +18,7 @@ import type {
   ProjectSearchContentsResult,
   ProjectSearchEntriesInput,
   ProjectSearchEntriesResult,
+  VcsError,
 } from "@t3tools/contracts";
 import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
 import { isExplicitRelativePath, isWindowsAbsolutePath } from "@t3tools/shared/path";
@@ -25,6 +26,7 @@ import { normalizeSearchQuery } from "@t3tools/shared/searchRanking";
 
 import { expandHomePathWith } from "../pathExpansion.ts";
 import * as VcsProcess from "../vcs/VcsProcess.ts";
+import * as VcsDriverRegistry from "../vcs/VcsDriverRegistry.ts";
 import * as WorkspacePaths from "./WorkspacePaths.ts";
 import * as WorkspaceSearchIndex from "./WorkspaceSearchIndex.ts";
 
@@ -137,6 +139,7 @@ export const make = Effect.gen(function* () {
   const workspacePaths = yield* WorkspacePaths.WorkspacePaths;
   const workspaceSearchIndexes = yield* WorkspaceSearchIndex.WorkspaceSearchIndexMap;
   const vcsProcess = yield* VcsProcess.VcsProcess;
+  const vcsDriverRegistry = yield* VcsDriverRegistry.VcsDriverRegistry;
 
   const normalizeWorkspaceRoot = Effect.fn("WorkspaceEntries.normalizeWorkspaceRoot")(function* (
     cwd: string,
@@ -267,6 +270,25 @@ export const make = Effect.gen(function* () {
     );
   });
 
+  /**
+   * Ignored entries come from the VCS, never the search index, which holds no
+   * ignored paths at all. Failures degrade to the plain listing: a project
+   * without a repository simply has nothing ignored to show.
+   */
+  const listIgnoredEntries = Effect.fn("WorkspaceEntries.listIgnoredEntries")(
+    function* (cwd: string): Effect.fn.Return<ReadonlyArray<ProjectEntry>, VcsError> {
+      const handle = yield* vcsDriverRegistry.detect({ cwd });
+      if (!handle?.driver.listIgnoredEntries) return [];
+      const result = yield* handle.driver.listIgnoredEntries(cwd);
+      return result.entries.map((entry) => ({ ...entry, ignored: true }));
+    },
+    Effect.catch((cause) =>
+      Effect.logWarning("Failed to list ignored workspace entries", { cause }).pipe(
+        Effect.as<ReadonlyArray<ProjectEntry>>([]),
+      ),
+    ),
+  );
+
   const list: WorkspaceEntries["Service"]["list"] = Effect.fn("WorkspaceEntries.list")(
     function* (input) {
       const normalizedCwd = yield* normalizeWorkspaceRoot(input.cwd);
@@ -294,24 +316,26 @@ export const make = Effect.gen(function* () {
             const directory = await NodeFSP.realpath(target.absolutePath);
             const relative = path.relative(root, directory);
             if (
-              relative === ".." ||
-              relative.startsWith(`..${path.sep}`) ||
-              path.isAbsolute(relative) ||
               relative.split(path.sep).includes(".git") ||
               target.relativePath.split("/").includes(".git")
             ) {
-              throw new Error("Directory must be inside the workspace and outside .git.");
+              throw new Error("Directory must be outside .git.");
             }
             const children = await NodeFSP.readdir(directory, { withFileTypes: true });
-            return children.flatMap((child): ProjectEntry[] => {
-              if (child.name === ".git" || (!child.isDirectory() && !child.isFile())) return [];
-              return [
-                {
-                  path: target.relativePath ? `${target.relativePath}/${child.name}` : child.name,
-                  kind: child.isDirectory() ? "directory" : "file",
-                },
-              ];
-            });
+            const entries: ProjectEntry[] = [];
+            for (const child of children) {
+              if (child.name === ".git") continue;
+              // Workspace links may point at external notes folders, just like file reads.
+              const info = child.isSymbolicLink()
+                ? await NodeFSP.stat(path.join(directory, child.name)).catch(() => undefined)
+                : child;
+              if (!info || (!info.isDirectory() && !info.isFile())) continue;
+              entries.push({
+                path: target.relativePath ? `${target.relativePath}/${child.name}` : child.name,
+                kind: info.isDirectory() ? "directory" : "file",
+              });
+            }
+            return entries;
           },
           catch: toError,
         });
@@ -342,7 +366,7 @@ export const make = Effect.gen(function* () {
           truncated: false,
         };
       }
-      return yield* Effect.gen(function* () {
+      const indexed = yield* Effect.gen(function* () {
         const searchIndex = yield* WorkspaceSearchIndex.WorkspaceSearchIndex;
         return yield* searchIndex.list();
       }).pipe(
@@ -352,6 +376,20 @@ export const make = Effect.gen(function* () {
           ),
         ),
       );
+      if (!input.includeIgnored) return indexed;
+
+      const ignored = yield* listIgnoredEntries(normalizedCwd);
+      if (ignored.length === 0) return indexed;
+      const knownPaths = new Set(indexed.entries.map((entry) => entry.path));
+      const merged = WorkspaceSearchIndex.withDirectoryAncestors([
+        ...indexed.entries,
+        ...ignored.filter((entry) => !knownPaths.has(entry.path)),
+      ]).toSorted((left, right) => left.path.localeCompare(right.path));
+      const entries = merged.slice(0, WorkspaceSearchIndex.WORKSPACE_INDEX_MAX_ENTRIES);
+      return {
+        entries,
+        truncated: indexed.truncated || entries.length < merged.length,
+      };
     },
   );
 

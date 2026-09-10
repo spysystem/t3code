@@ -278,6 +278,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["command menu dollar $ slash /"],
   },
   {
+    id: "files-show-ignored",
+    title: "Show ignored files",
+    to: "/settings/general",
+    searchTerms: ["gitignore ignored hidden files panel tree .env node_modules"],
+  },
+  {
     id: "composer-collapse",
     title: "Collapse composer on scroll",
     to: "/settings/general",

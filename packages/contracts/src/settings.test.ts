@@ -236,6 +236,13 @@ describe("ClientSettings load balancing", () => {
   });
 });
 
+describe("ClientSettings ignored files", () => {
+  it("hides ignored files by default and accepts opting in", () => {
+    expect(decodeClientSettings({}).filesShowIgnored).toBe(false);
+    expect(decodeClientSettingsPatch({ filesShowIgnored: true }).filesShowIgnored).toBe(true);
+  });
+});
+
 describe("ClientSettings word wrap", () => {
   it("defaults word wrap on", () => {
     expect(decodeClientSettings({}).wordWrap).toBe(true);

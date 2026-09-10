@@ -6929,7 +6929,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       const outsideFile = path.join(outsideDir, "outside.txt");
       yield* fs.writeFileString(outsideFile, "outside\n");
       yield* fs.symlink(outsideFile, path.join(workspaceDir, "linked-outside.txt"));
-      const resolvedOutsideFile = yield* fs.realPath(outsideFile);
 
       yield* buildAppUnderTest();
 
@@ -6994,19 +6993,10 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       assert.equal(listError.normalizedCwd, invalidWorkspace);
       assert.isDefined(listError.cause);
 
-      if (results.read._tag !== "Failure" || results.read.failure._tag !== "ProjectReadFileError") {
-        assert.fail("Expected a ProjectReadFileError");
+      if (results.read._tag !== "Success") {
+        assert.fail("Expected workspace symlink reads to succeed");
       }
-      const readError = results.read.failure;
-      assert.equal(
-        readError.message,
-        `Failed to read workspace file 'linked-outside.txt' in '${workspaceDir}'.`,
-      );
-      assert.equal(readError.cwd, workspaceDir);
-      assert.equal(readError.relativePath, "linked-outside.txt");
-      assert.equal(readError.failure, "resolved_path_outside_root");
-      assert.equal(readError.resolvedPath, resolvedOutsideFile);
-      assert.isDefined(readError.cause);
+      assert.equal(results.read.success.contents, "outside\n");
 
       if (
         results.browse._tag !== "Failure" ||

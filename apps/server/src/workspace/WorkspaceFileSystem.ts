@@ -13,6 +13,9 @@ import * as NodeFS from "node:fs";
 import * as NodeFSP from "node:fs/promises";
 
 import type {
+  ProjectEntry,
+  ProjectListDirectoryInput,
+  ProjectListDirectoryResult,
   ProjectReadFileInput,
   ProjectReadFileResult,
   ProjectWriteFileInput,
@@ -29,6 +32,8 @@ import * as WorkspaceEntries from "./WorkspaceEntries.ts";
 import * as WorkspacePaths from "./WorkspacePaths.ts";
 
 const PROJECT_READ_FILE_MAX_BYTES = 1024 * 1024;
+// One directory level; a pathological `.pnpm` still stays a bounded payload.
+const PROJECT_LIST_DIRECTORY_MAX_ENTRIES = 5_000;
 
 export class WorkspaceFileSystemOperationError extends Schema.TaggedError<WorkspaceFileSystemOperationError>()(
   "WorkspaceFileSystemOperationError",
@@ -46,26 +51,13 @@ export class WorkspaceFileSystemOperationError extends Schema.TaggedError<Worksp
       "close",
       "make-directory",
       "write-file",
+      "read-directory",
     ]),
     cause: Schema.Defect(),
   },
 ) {
   override get message(): string {
     return `Workspace file operation '${this.operation}' failed at '${this.operationPath}' for resolved path '${this.resolvedPath}' (requested as '${this.relativePath}' in '${this.workspaceRoot}').`;
-  }
-}
-
-export class WorkspaceFilePathEscapeError extends Schema.TaggedError<WorkspaceFilePathEscapeError>()(
-  "WorkspaceFilePathEscapeError",
-  {
-    workspaceRoot: Schema.String,
-    relativePath: Schema.String,
-    resolvedWorkspaceRoot: Schema.String,
-    resolvedPath: Schema.String,
-  },
-) {
-  override get message(): string {
-    return `Workspace file '${this.relativePath}' resolves outside workspace root '${this.workspaceRoot}': ${this.resolvedPath}`;
   }
 }
 
@@ -79,6 +71,19 @@ export class WorkspacePathNotFileError extends Schema.TaggedError<WorkspacePathN
 ) {
   override get message(): string {
     return `Workspace path '${this.relativePath}' in '${this.workspaceRoot}' is not a file: ${this.resolvedPath}`;
+  }
+}
+
+export class WorkspacePathNotDirectoryError extends Schema.TaggedError<WorkspacePathNotDirectoryError>()(
+  "WorkspacePathNotDirectoryError",
+  {
+    workspaceRoot: Schema.String,
+    relativePath: Schema.String,
+    resolvedPath: Schema.String,
+  },
+) {
+  override get message(): string {
+    return `Workspace path '${this.relativePath}' in '${this.workspaceRoot}' is not a directory: ${this.resolvedPath}`;
   }
 }
 
@@ -97,8 +102,8 @@ export class WorkspaceBinaryFileError extends Schema.TaggedError<WorkspaceBinary
 
 export const WorkspaceFileSystemError = Schema.Union([
   WorkspaceFileSystemOperationError,
-  WorkspaceFilePathEscapeError,
   WorkspacePathNotFileError,
+  WorkspacePathNotDirectoryError,
   WorkspaceBinaryFileError,
 ]);
 export type WorkspaceFileSystemError = typeof WorkspaceFileSystemError.Type;
@@ -115,6 +120,17 @@ export class WorkspaceFileSystem extends Context.Service<
       input: ProjectReadFileInput,
     ) => Effect.Effect<
       ProjectReadFileResult,
+      WorkspaceFileSystemError | WorkspacePaths.WorkspacePathOutsideRootError
+    >;
+    /**
+     * List one level of a directory relative to the workspace root. The Files
+     * panel uses this to expand VCS-ignored directories that the workspace
+     * index deliberately leaves out.
+     */
+    readonly listDirectory: (
+      input: ProjectListDirectoryInput,
+    ) => Effect.Effect<
+      ProjectListDirectoryResult,
       WorkspaceFileSystemError | WorkspacePaths.WorkspacePathOutsideRootError
     >;
     /**
@@ -140,73 +156,95 @@ export const make = Effect.gen(function* () {
   const workspaceEntries = yield* WorkspaceEntries.WorkspaceEntries;
 
   /**
-   * Resolves the file a read targets. Workspace-relative paths must stay inside the
-   * root, symlinks included. An absolute path reads a host file in place, such as a
-   * report an agent wrote to a temp directory; it gets no root check.
+   * Resolves a workspace-relative read target. The path must be lexically inside
+   * the root; symlinks are followed wherever they point. Reads already accept
+   * absolute host paths, so a link to a note vault or a Dropbox folder next to the
+   * repo exposes nothing that was not reachable, and refusing it only broke
+   * projects that keep ignored folders as links. Writes keep their root check.
+   */
+  const resolveWorkspaceTarget = Effect.fn("WorkspaceFileSystem.resolveWorkspaceTarget")(
+    function* (input: { readonly cwd: string; readonly relativePath: string }) {
+      const target = yield* workspacePaths.resolveRelativePathWithinRoot({
+        workspaceRoot: input.cwd,
+        relativePath: input.relativePath,
+      });
+      const realTargetPath = yield* Effect.tryPromise({
+        try: () => NodeFSP.realpath(target.absolutePath),
+        catch: (cause) =>
+          new WorkspaceFileSystemOperationError({
+            workspaceRoot: input.cwd,
+            relativePath: input.relativePath,
+            resolvedPath: target.absolutePath,
+            operationPath: target.absolutePath,
+            operation: "realpath-target",
+            cause,
+          }),
+      });
+      return { relativePath: target.relativePath, realTargetPath };
+    },
+  );
+
+  /**
+   * Resolves the file a read targets. An absolute path reads a host file in place,
+   * such as a report an agent wrote to a temp directory; it gets no root check.
    */
   const resolveReadTarget = Effect.fn("WorkspaceFileSystem.resolveReadTarget")(function* (
     input: ProjectReadFileInput,
   ) {
     const requestedPath = input.relativePath.trim();
-    if (path.isAbsolute(requestedPath)) {
-      const realTargetPath = yield* Effect.tryPromise({
-        try: () => NodeFSP.realpath(requestedPath),
-        catch: (cause) =>
-          new WorkspaceFileSystemOperationError({
-            workspaceRoot: input.cwd,
-            relativePath: input.relativePath,
-            resolvedPath: requestedPath,
-            operationPath: requestedPath,
-            operation: "realpath-target",
-            cause,
-          }),
-      });
-      return { relativePath: requestedPath, realTargetPath };
+    if (!path.isAbsolute(requestedPath)) {
+      return yield* resolveWorkspaceTarget(input);
     }
-
-    const target = yield* workspacePaths.resolveRelativePathWithinRoot({
-      workspaceRoot: input.cwd,
-      relativePath: input.relativePath,
-    });
-
-    const realWorkspaceRoot = yield* Effect.tryPromise({
-      try: () => NodeFSP.realpath(input.cwd),
-      catch: (cause) =>
-        new WorkspaceFileSystemOperationError({
-          workspaceRoot: input.cwd,
-          relativePath: input.relativePath,
-          resolvedPath: target.absolutePath,
-          operationPath: input.cwd,
-          operation: "realpath-workspace-root",
-          cause,
-        }),
-    });
     const realTargetPath = yield* Effect.tryPromise({
-      try: () => NodeFSP.realpath(target.absolutePath),
+      try: () => NodeFSP.realpath(requestedPath),
       catch: (cause) =>
         new WorkspaceFileSystemOperationError({
           workspaceRoot: input.cwd,
           relativePath: input.relativePath,
-          resolvedPath: target.absolutePath,
-          operationPath: target.absolutePath,
+          resolvedPath: requestedPath,
+          operationPath: requestedPath,
           operation: "realpath-target",
           cause,
         }),
     });
-    const relativeRealPath = path.relative(realWorkspaceRoot, realTargetPath);
-    if (
-      relativeRealPath.startsWith(`..${path.sep}`) ||
-      relativeRealPath === ".." ||
-      path.isAbsolute(relativeRealPath)
-    ) {
-      return yield* new WorkspaceFilePathEscapeError({
-        workspaceRoot: input.cwd,
-        relativePath: input.relativePath,
-        resolvedWorkspaceRoot: realWorkspaceRoot,
-        resolvedPath: realTargetPath,
+    return { relativePath: requestedPath, realTargetPath };
+  });
+
+  const listDirectory: WorkspaceFileSystem["Service"]["listDirectory"] = Effect.fn(
+    "WorkspaceFileSystem.listDirectory",
+  )(function* (input) {
+    const target = yield* resolveWorkspaceTarget(input);
+    const dirents = yield* Effect.tryPromise({
+      try: () => NodeFSP.readdir(target.realTargetPath, { withFileTypes: true }),
+      catch: (cause) =>
+        (cause as NodeJS.ErrnoException | undefined)?.code === "ENOTDIR"
+          ? new WorkspacePathNotDirectoryError({
+              workspaceRoot: input.cwd,
+              relativePath: input.relativePath,
+              resolvedPath: target.realTargetPath,
+            })
+          : new WorkspaceFileSystemOperationError({
+              workspaceRoot: input.cwd,
+              relativePath: input.relativePath,
+              resolvedPath: target.realTargetPath,
+              operationPath: target.realTargetPath,
+              operation: "read-directory",
+              cause,
+            }),
+    });
+    const entries: ProjectEntry[] = [];
+    for (const dirent of dirents) {
+      if (dirent.name === ".git") continue;
+      entries.push({
+        path: `${target.relativePath}/${dirent.name}`,
+        kind: dirent.isDirectory() ? "directory" : "file",
       });
     }
-    return { relativePath: target.relativePath, realTargetPath };
+    entries.sort((left, right) => left.path.localeCompare(right.path));
+    return {
+      entries: entries.slice(0, PROJECT_LIST_DIRECTORY_MAX_ENTRIES),
+      truncated: entries.length > PROJECT_LIST_DIRECTORY_MAX_ENTRIES,
+    };
   });
 
   const readFile: WorkspaceFileSystem["Service"]["readFile"] = Effect.fn(
@@ -340,7 +378,7 @@ export const make = Effect.gen(function* () {
     return { relativePath: target.relativePath };
   });
 
-  return WorkspaceFileSystem.of({ readFile, writeFile });
+  return WorkspaceFileSystem.of({ listDirectory, readFile, writeFile });
 });
 
 export const layer = Layer.effect(WorkspaceFileSystem, make);

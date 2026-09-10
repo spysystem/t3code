@@ -44,6 +44,20 @@ export const VcsListWorkspaceFilesResult = Schema.Struct({
 });
 export type VcsListWorkspaceFilesResult = typeof VcsListWorkspaceFilesResult.Type;
 
+export const VcsIgnoredEntry = Schema.Struct({
+  path: TrimmedNonEmptyString,
+  kind: Schema.Literals(["file", "directory"]),
+});
+export type VcsIgnoredEntry = typeof VcsIgnoredEntry.Type;
+
+// Ignored paths with fully ignored directories collapsed to one entry, so the
+// result stays proportional to the ignore rules rather than to `node_modules`.
+export const VcsListIgnoredEntriesResult = Schema.Struct({
+  entries: Schema.Array(VcsIgnoredEntry),
+  truncated: Schema.Boolean,
+});
+export type VcsListIgnoredEntriesResult = typeof VcsListIgnoredEntriesResult.Type;
+
 export const VcsRemote = Schema.Struct({
   name: TrimmedNonEmptyString,
   url: TrimmedNonEmptyString,
