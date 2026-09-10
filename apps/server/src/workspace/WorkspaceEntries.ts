@@ -312,13 +312,10 @@ export const make = Effect.gen(function* () {
             const directory = await NodeFSP.realpath(target.absolutePath);
             const relative = path.relative(root, directory);
             if (
-              relative === ".." ||
-              relative.startsWith(`..${path.sep}`) ||
-              path.isAbsolute(relative) ||
               relative.split(path.sep).includes(".git") ||
               target.relativePath.split("/").includes(".git")
             ) {
-              throw new Error("Directory must be inside the workspace and outside .git.");
+              throw new Error("Directory must be outside .git.");
             }
             const children = await NodeFSP.readdir(directory, { withFileTypes: true });
             const isSameOrInside = (parent: string, child: string) => {
@@ -347,9 +344,9 @@ export const make = Effect.gen(function* () {
               const resolved = await NodeFSP.realpath(path.join(directory, name)).catch(
                 () => undefined,
               );
+              // Workspace links may point at external notes folders, just like file reads.
               if (
                 resolved === undefined ||
-                !isSameOrInside(root, resolved) ||
                 path.relative(root, resolved).split(path.sep).includes(".git")
               ) {
                 return undefined;
