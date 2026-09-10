@@ -414,6 +414,10 @@
     "./pull-request-markdown": {
       "types": "./src/pullRequestMarkdown.ts",
       "default": "./src/pullRequestMarkdown.ts"
+    },
+    "./thread-links": {
+      "types": "./src/threadLinks.ts",
+      "default": "./src/threadLinks.ts"
     }
   },
   "scripts": {
