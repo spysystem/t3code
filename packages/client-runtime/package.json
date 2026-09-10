@@ -258,6 +258,10 @@
     "./file-preview": {
       "types": "./src/filePreview.ts",
       "default": "./src/filePreview.ts"
+    },
+    "./thread-links": {
+      "types": "./src/threadLinks.ts",
+      "default": "./src/threadLinks.ts"
     }
   },
   "scripts": {
