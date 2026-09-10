@@ -302,6 +302,10 @@
     "./device/duo-control": {
       "types": "./src/device/duoControl.ts",
       "default": "./src/device/duoControl.ts"
+    },
+    "./thread-links": {
+      "types": "./src/threadLinks.ts",
+      "default": "./src/threadLinks.ts"
     }
   },
   "scripts": {
