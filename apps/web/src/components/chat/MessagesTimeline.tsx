@@ -24,6 +24,7 @@ import {
 } from "@t3tools/contracts";
 import { parseScopedThreadKey } from "@t3tools/client-runtime/environment";
 import { replaceComposerContextReferences } from "@t3tools/shared/composerContextReferences";
+import { reasoningPresentation } from "@t3tools/client-runtime/reasoning";
 import type { CodexArtifactTemplate } from "@t3tools/client-runtime/codex-artifact-templates";
 import {
   resolveWorkEntryToolPresentation,
@@ -417,6 +418,7 @@ interface MessagesTimelineProps {
   workspaceRoot: string | undefined;
   skills?: ReadonlyArray<Pick<ServerProviderSkill, "name" | "displayName">>;
   anchorMessageId: MessageId | null;
+  showThinking?: boolean;
   onAnchorReady: (messageId: MessageId, anchorIndex: number) => void;
   contentInsetEndAdjustment: number;
   /**
@@ -481,6 +483,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   markdownCwd,
   resolvedTheme,
   timestampFormat,
+  showThinking = false,
   workspaceRoot,
   skills = EMPTY_TIMELINE_SKILLS,
   anchorMessageId,
@@ -710,6 +713,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     const projection = deriveMessagesTimelineRowsWithState(
       {
         timelineEntries,
+        showThinking,
         latestTurn,
         runningTurnId,
         expandedTurnIds: paintedExpandedTurnIds,
@@ -733,6 +737,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     listIdentityKey,
     workspaceRoot,
     timelineEntries,
+    showThinking,
     latestTurn,
     runningTurnId,
     paintedExpandedTurnIds,
@@ -1456,6 +1461,9 @@ const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: Time
       {row.kind === "turn-fold" ? <TurnFoldTimelineRow row={row} /> : null}
       {row.kind === "context-compaction" ? <ContextCompactionTimelineRow row={row} /> : null}
       {row.kind === "message" && row.message.role === "user" ? <UserTimelineRow row={row} /> : null}
+      {row.kind === "message" && row.message.role === "reasoning" ? (
+        <ReasoningTimelineRow row={row} />
+      ) : null}
       {row.kind === "message" && row.message.role === "assistant" ? (
         <AssistantTimelineRow row={row} />
       ) : null}
@@ -2045,6 +2053,44 @@ function TurnFoldTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "turn-
         <span>{row.label}</span>
         <Icon className="size-3.5" />
       </button>
+    </div>
+  );
+}
+
+function ReasoningTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" }> }) {
+  const ctx = use(TimelineRowCtx);
+  const presentation = reasoningPresentation(
+    row.message,
+    row.reasoningActive ? row.message.turnId : null,
+    row.reasoningExpanded,
+  );
+  const Chevron = presentation.expanded ? ChevronDownIcon : ChevronRightIcon;
+  return (
+    <div className="min-w-0 px-1 py-0.5 text-sm text-muted-foreground">
+      <button
+        type="button"
+        aria-expanded={presentation.expanded}
+        disabled={presentation.active || !presentation.hasText}
+        onClick={() => ctx.onToggleWorkGroup(row.id, row.id)}
+        className="flex max-w-full items-center gap-2 rounded-md py-1 text-left enabled:cursor-pointer enabled:hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <BrainIcon className="size-3.5 shrink-0" />
+        <span className="shrink-0">{presentation.label}</span>
+        {presentation.preview ? (
+          <span className="min-w-0 truncate">{presentation.preview}</span>
+        ) : null}
+        {presentation.hasText ? <Chevron className="size-3.5 shrink-0" /> : null}
+      </button>
+      {presentation.expanded && presentation.hasText ? (
+        <div className="mt-1 min-w-0 border-l border-border pl-4">
+          <ChatMarkdown
+            text={row.message.text}
+            isStreaming={presentation.active}
+            cwd={ctx.markdownCwd}
+            threadRef={ctx.threadRef ?? undefined}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }

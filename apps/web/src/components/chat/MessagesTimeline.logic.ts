@@ -299,7 +299,7 @@ function maxIsoTimestamp(a: string | null, b: string | null): string | null {
 
 export interface TimelineDurationMessage {
   id: string;
-  role: "user" | "assistant" | "system";
+  role: ChatMessage["role"];
   createdAt: string;
   updatedAt: string;
   streaming: boolean;
@@ -366,6 +366,8 @@ export type MessagesTimelineRow =
       createdAt: string;
       message: ChatMessage;
       durationStart: string;
+      reasoningActive?: boolean;
+      reasoningExpanded?: boolean;
       showAssistantMeta: boolean;
       showAssistantCopyButton: boolean;
       assistantCopyStreaming: boolean;
@@ -542,7 +544,9 @@ function lastUserMessageIndex(timelineEntries: ReadonlyArray<TimelineEntry>): nu
 
 function timelineEntryTurnId(entry: TimelineEntry): TurnId | null {
   if (entry.kind === "message") {
-    return entry.message.role === "assistant" ? (entry.message.turnId ?? null) : null;
+    return entry.message.role === "assistant" || entry.message.role === "reasoning"
+      ? (entry.message.turnId ?? null)
+      : null;
   }
   if (entry.kind === "proposed-plan") {
     return entry.proposedPlan.turnId;
@@ -621,7 +625,8 @@ function deriveTurnFolds(input: {
       continue;
     }
     const turnId =
-      entry.kind === "message" && entry.message.role === "assistant"
+      entry.kind === "message" &&
+      (entry.message.role === "assistant" || entry.message.role === "reasoning")
         ? (entry.message.turnId ?? null)
         : entry.kind === "work"
           ? (entry.entry.turnId ?? null)
@@ -869,6 +874,7 @@ function buildRevertTurnCountByUserMessageId(input: {
 
 export function deriveMessagesTimelineRows(input: {
   timelineEntries: ReadonlyArray<TimelineEntry>;
+  showThinking?: boolean;
   latestTurn?: TimelineLatestTurn | null;
   runningTurnId?: TurnId | null;
   expandedTurnIds?: ReadonlySet<TurnId>;
@@ -884,6 +890,11 @@ export function deriveMessagesTimelineRows(input: {
   /** Messages sent during the running turn, rendered after the live rows. */
   queuedMessages?: ReadonlyArray<QueuedComposerMessage>;
 }): MessagesTimelineRow[] {
+  const timelineEntries = input.showThinking
+    ? input.timelineEntries
+    : input.timelineEntries.filter(
+        (entry) => entry.kind !== "message" || entry.message.role !== "reasoning",
+      );
   const turnDiffSummaryByAssistantMessageId = new Map<MessageId, TurnDiffSummary>();
   for (const summary of input.turnDiffSummaries) {
     if (summary.assistantMessageId) {
@@ -892,7 +903,7 @@ export function deriveMessagesTimelineRows(input: {
   }
   const revertTurnCountByUserMessageId = buildRevertTurnCountByUserMessageId({
     supportsConversationRollback: input.supportsConversationRollback,
-    timelineEntries: input.timelineEntries,
+    timelineEntries: timelineEntries,
     turnDiffSummaryByAssistantMessageId,
     inferredCheckpointTurnCountByTurnId: input.supportsConversationRollback
       ? inferCheckpointTurnCountByTurnId(input.turnDiffSummaries)
@@ -900,20 +911,20 @@ export function deriveMessagesTimelineRows(input: {
   });
   const nextRows: MessagesTimelineRow[] = [];
   const durationStartByMessageId = computeMessageDurationStart(
-    input.timelineEntries.flatMap((entry) => (entry.kind === "message" ? [entry.message] : [])),
+    timelineEntries.flatMap((entry) => (entry.kind === "message" ? [entry.message] : [])),
   );
-  const terminalAssistantMessageIds = deriveTerminalAssistantMessageIds(input.timelineEntries);
+  const terminalAssistantMessageIds = deriveTerminalAssistantMessageIds(timelineEntries);
   const unsettledTurnId = deriveUnsettledTurnId(
     input.latestTurn ?? null,
     input.runningTurnId ?? null,
   );
   const activeVisualResponseTurnIds = deriveActiveVisualResponseTurnIds({
-    timelineEntries: input.timelineEntries,
+    timelineEntries: timelineEntries,
     unsettledTurnId,
     isWorking: input.isWorking,
   });
   const foldsByAnchorEntryId = deriveTurnFolds({
-    timelineEntries: input.timelineEntries,
+    timelineEntries: timelineEntries,
     terminalAssistantMessageIds,
     latestTurn: input.latestTurn ?? null,
     unfoldedTurnIds: activeVisualResponseTurnIds,
@@ -927,9 +938,9 @@ export function deriveMessagesTimelineRows(input: {
     }
   }
 
-  let activeTurnHeaderIndex = input.timelineEntries.length;
+  let activeTurnHeaderIndex = timelineEntries.length;
   if (input.isWorking) {
-    const latestUserMessageIndex = lastUserMessageIndex(input.timelineEntries);
+    const latestUserMessageIndex = lastUserMessageIndex(timelineEntries);
     activeTurnHeaderIndex = latestUserMessageIndex + 1;
   }
   const entryBelongsToActiveTurn = (entry: TimelineEntry, index: number) =>
@@ -942,8 +953,8 @@ export function deriveMessagesTimelineRows(input: {
     entry.toolLifecycleStatus === "inProgress" &&
     entry.turnId === unsettledTurnId;
   const activeToolEntries: Array<Extract<TimelineEntry, { kind: "work" }>> = [];
-  for (let index = input.timelineEntries.length - 1; index >= activeTurnHeaderIndex; index -= 1) {
-    const entry = input.timelineEntries[index]!;
+  for (let index = timelineEntries.length - 1; index >= activeTurnHeaderIndex; index -= 1) {
+    const entry = timelineEntries[index]!;
     if (
       !entryBelongsToActiveTurn(entry, index) ||
       entry.kind !== "work" ||
@@ -1004,7 +1015,7 @@ export function deriveMessagesTimelineRows(input: {
     activeWorkRow !== null || latestToolFailed ? activeToolEntries.map((entry) => entry.id) : [],
   );
   const appendWorkingRow = () => {
-    const latestUserMessage = input.timelineEntries[lastUserMessageIndex(input.timelineEntries)];
+    const latestUserMessage = timelineEntries[lastUserMessageIndex(timelineEntries)];
     const visualResponseStartedAt =
       activeVisualResponseTurnIds.size > 1 &&
       latestUserMessage?.kind === "message" &&
@@ -1032,8 +1043,8 @@ export function deriveMessagesTimelineRows(input: {
     );
   };
 
-  for (let index = 0; index < input.timelineEntries.length; index += 1) {
-    const timelineEntry = input.timelineEntries[index];
+  for (let index = 0; index < timelineEntries.length; index += 1) {
+    const timelineEntry = timelineEntries[index];
     if (!timelineEntry) {
       continue;
     }
@@ -1102,8 +1113,8 @@ export function deriveMessagesTimelineRows(input: {
       }
       const groupedEntries = [timelineEntry.entry];
       let cursor = index + 1;
-      while (cursor < input.timelineEntries.length) {
-        const nextEntry = input.timelineEntries[cursor];
+      while (cursor < timelineEntries.length) {
+        const nextEntry = timelineEntries[cursor];
         if (
           !nextEntry ||
           nextEntry.kind !== "work" ||
@@ -1258,6 +1269,15 @@ export function deriveMessagesTimelineRows(input: {
       id: timelineEntry.id,
       createdAt: timelineEntry.createdAt,
       message: timelineEntry.message,
+      ...(timelineEntry.message.role === "reasoning"
+        ? {
+            reasoningActive:
+              input.isWorking &&
+              timelineEntry.message.streaming &&
+              activeVisualResponseTurnIds.has(timelineEntry.message.turnId!),
+            reasoningExpanded: input.expandedWorkGroupIds?.has(timelineEntry.id) ?? false,
+          }
+        : {}),
       durationStart,
       showAssistantMeta,
       showAssistantCopyButton: showAssistantMeta,
@@ -1305,7 +1325,7 @@ export function deriveMessagesTimelineRows(input: {
     return attachTrailingToolGroupsToAssistant(nextRows);
   }
 
-  if (input.isWorking && activeTurnHeaderIndex === input.timelineEntries.length) {
+  if (input.isWorking && activeTurnHeaderIndex === timelineEntries.length) {
     appendWorkingRow();
   }
   // An async setup script outlives the handoff. The turn owns the header, so
@@ -1333,7 +1353,11 @@ export function deriveMessagesTimelineRows(input: {
       nextRows.push(setupRow);
     }
   }
-  if (input.isWorking && (!hasActivityRow || latestToolFailed)) {
+  if (
+    input.isWorking &&
+    (!hasActivityRow || latestToolFailed) &&
+    !nextRows.some((row) => row.kind === "message" && row.reasoningActive)
+  ) {
     nextRows.push({
       kind: "thinking",
       id: LIVE_ACTIVITY_ROW_ID,
@@ -1535,6 +1559,8 @@ function isRowUnchanged(a: MessagesTimelineRow, b: MessagesTimelineRow): boolean
       return (
         a.message === bm.message &&
         a.durationStart === bm.durationStart &&
+        a.reasoningActive === bm.reasoningActive &&
+        a.reasoningExpanded === bm.reasoningExpanded &&
         a.showAssistantMeta === bm.showAssistantMeta &&
         a.showAssistantCopyButton === bm.showAssistantCopyButton &&
         a.assistantCopyStreaming === bm.assistantCopyStreaming &&
