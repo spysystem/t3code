@@ -23,6 +23,7 @@ export type ThreadActionMenuId =
   | "copy-path"
   | "copy-branch"
   | "copy-thread-id"
+  | "copy-native-thread-id"
   | "archive"
   | "delete";
 
@@ -40,6 +41,7 @@ export interface ThreadActionMenuState {
     readonly snooze: boolean;
     readonly pinning: boolean;
     readonly titleRegeneration: boolean;
+    readonly nativeThreadId?: boolean;
   };
   readonly snoozePresets: ReadonlyArray<SnoozePreset>;
 }
@@ -117,7 +119,10 @@ export function buildThreadActionMenuItems(
         ...(state.branch
           ? [{ id: "copy-branch" as const, label: "Branch", icon: "git-branch" }]
           : []),
-        { id: "copy-thread-id", label: "Thread ID", icon: "hash" },
+        { id: "copy-thread-id", label: "T3 thread ID", icon: "hash" },
+        ...(state.supports.nativeThreadId
+          ? [{ id: "copy-native-thread-id" as const, label: "Native thread ID", icon: "hash" }]
+          : []),
       ],
     },
     { id: "project-settings", label: "Project settings", icon: "settings" },
