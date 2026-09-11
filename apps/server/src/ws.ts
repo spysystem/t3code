@@ -52,6 +52,7 @@ import {
   ProjectSearchContentsError,
   ProjectSearchEntriesError,
   ProjectWriteFileError,
+  ProviderGetNativeThreadIdError,
   ProviderUploadFeedbackError,
   ProviderSetupError,
   RelayClientInstallFailedError,
@@ -104,6 +105,7 @@ import {
 } from "./observability/RpcInstrumentation.ts";
 import * as ProviderRegistry from "./provider/Services/ProviderRegistry.ts";
 import * as ProviderService from "./provider/Services/ProviderService.ts";
+import { readNativeThreadId } from "./provider/nativeThreadId.ts";
 import * as ProviderSessionDirectory from "./provider/Services/ProviderSessionDirectory.ts";
 import * as ProviderMaintenanceRunner from "./provider/providerMaintenanceRunner.ts";
 import { ProviderAuthService } from "./provider/Services/ProviderAuthService.ts";
@@ -1868,6 +1870,19 @@ const makeWsRpcLayer = (
               return { providers };
             }),
             { "rpc.aggregate": "server" },
+          ),
+        [WS_METHODS.providerGetNativeThreadId]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.providerGetNativeThreadId,
+            providerSessionDirectory.getBinding(input.threadId).pipe(
+              Effect.map((binding) => ({
+                nativeThreadId: Option.isSome(binding) ? readNativeThreadId(binding.value) : null,
+              })),
+              Effect.mapError(
+                (cause) => new ProviderGetNativeThreadIdError({ threadId: input.threadId, cause }),
+              ),
+            ),
+            { "rpc.aggregate": "provider" },
           ),
         [WS_METHODS.providerUploadFeedback]: (input) =>
           observeRpcEffect(
