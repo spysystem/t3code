@@ -115,6 +115,23 @@ export const ProviderRespondToUserInputInput = Schema.Struct({
 });
 export type ProviderRespondToUserInputInput = typeof ProviderRespondToUserInputInput.Type;
 
+export const ProviderGetNativeThreadIdInput = Schema.Struct({
+  threadId: ThreadId,
+});
+
+export const ProviderGetNativeThreadIdResult = Schema.Struct({
+  nativeThreadId: Schema.NullOr(TrimmedNonEmptyString),
+});
+
+export class ProviderGetNativeThreadIdError extends Schema.TaggedError<ProviderGetNativeThreadIdError>()(
+  "ProviderGetNativeThreadIdError",
+  { threadId: ThreadId, cause: Schema.Defect() },
+) {
+  override get message(): string {
+    return `Failed to read the native thread ID for '${this.threadId}'.`;
+  }
+}
+
 export const ProviderUploadFeedbackInput = Schema.Struct({
   threadId: ThreadId,
   reason: Schema.optional(TrimmedNonEmptyString),
