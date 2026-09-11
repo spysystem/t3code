@@ -1,7 +1,8 @@
 import * as Schema from "effect/Schema";
+import * as Struct from "effect/Struct";
 import { describe, expect, it } from "vite-plus/test";
 
-import { ExecutionEnvironmentDescriptor } from "./environment.ts";
+import { ExecutionEnvironmentCapabilities, ExecutionEnvironmentDescriptor } from "./environment.ts";
 
 const decodeDescriptor = Schema.decodeUnknownSync(ExecutionEnvironmentDescriptor);
 
@@ -14,6 +15,20 @@ const descriptor = {
 } as const;
 
 describe("ExecutionEnvironmentDescriptor", () => {
+  it("keeps native thread identity optional and compatible with the preceding client schema", () => {
+    expect(decodeDescriptor(descriptor).capabilities.nativeThreadId).toBeUndefined();
+    const current = {
+      ...descriptor,
+      capabilities: { ...descriptor.capabilities, nativeThreadId: true },
+    };
+    expect(decodeDescriptor(current).capabilities.nativeThreadId).toBe(true);
+    const previous = ExecutionEnvironmentDescriptor.mapFields((fields) => ({
+      ...fields,
+      capabilities: ExecutionEnvironmentCapabilities.mapFields(Struct.omit(["nativeThreadId"])),
+    }));
+    expect(Schema.decodeUnknownSync(previous)(current)).toEqual(descriptor);
+  });
+
   it("treats a missing pull-request capability as unsupported under version skew", () => {
     expect(decodeDescriptor(descriptor).capabilities.pullRequests).toBeUndefined();
   });
