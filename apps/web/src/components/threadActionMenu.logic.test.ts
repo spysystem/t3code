@@ -28,6 +28,16 @@ function allIds(state: ThreadActionMenuState): string[] {
 }
 
 describe("buildThreadActionMenuItems", () => {
+  it("offers native ID copying only when the server supports it, retaining T3 ID copying", () => {
+    expect(allIds(baseState)).not.toContain("copy-native-thread-id");
+    const supported = allIds({
+      ...baseState,
+      supports: { ...baseState.supports, nativeThreadId: true },
+    });
+    expect(supported).toContain("copy-thread-id");
+    expect(supported).toContain("copy-native-thread-id");
+  });
+
   it("hides lifecycle items when the environment lacks the capabilities", () => {
     expect(
       ids({
