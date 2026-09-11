@@ -5618,6 +5618,46 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
+  it.effect("reads saved native thread IDs through websocket rpc without starting a provider", () =>
+    Effect.gen(function* () {
+      const threadId = ThreadId.make("t3-thread-native-id");
+      yield* buildAppUnderTest({
+        layers: {
+          providerSessionDirectory: {
+            getBinding: (id) =>
+              Effect.succeed(
+                id === threadId
+                  ? Option.some({
+                      threadId,
+                      provider: ProviderDriverKind.make("codex"),
+                      status: "stopped",
+                      resumeCursor: { threadId: "codex-native-id", privateData: "must-not-leak" },
+                    })
+                  : Option.none(),
+              ),
+          },
+        },
+      });
+      const wsUrl = yield* getWsServerUrl("/ws");
+      yield* Effect.scoped(
+        withWsRpcClient(wsUrl, (client) =>
+          Effect.gen(function* () {
+            assert.deepStrictEqual(
+              yield* client[WS_METHODS.providerGetNativeThreadId]({ threadId }),
+              { nativeThreadId: "codex-native-id" },
+            );
+            assert.deepStrictEqual(
+              yield* client[WS_METHODS.providerGetNativeThreadId]({
+                threadId: ThreadId.make("new-thread"),
+              }),
+              { nativeThreadId: null },
+            );
+          }),
+        ),
+      );
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
   it.effect("uploads Codex thread feedback through websocket rpc", () =>
     Effect.gen(function* () {
       const input = {
