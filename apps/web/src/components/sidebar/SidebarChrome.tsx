@@ -1,6 +1,7 @@
 import { ArrowLeftIcon, ChartNoAxesColumnIcon, SettingsIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { memo, useCallback } from "react";
+import { APP_FORK_LABEL } from "@t3tools/shared/branding";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 
 import { useEnvironmentIdentificationMode } from "../../hooks/useSettings";
@@ -78,7 +79,7 @@ export const SidebarChromeHeader = memo(function SidebarChromeHeader({
 function SidebarBrand({ onBackdrop }: { onBackdrop: boolean }) {
   return (
     <Link
-      aria-label="Go to threads"
+      aria-label="T3 Code (SPY), go to threads"
       className={cn(
         "relative z-10 ml-[var(--workspace-titlebar-content-left)] hidden h-7 w-fit min-w-0 shrink-0 items-center overflow-hidden rounded-md outline-hidden ring-ring focus-visible:ring-2 md:flex",
         onBackdrop ? "text-white" : "text-foreground",
@@ -95,6 +96,14 @@ function SidebarBrand({ onBackdrop }: { onBackdrop: boolean }) {
           )}
         >
           Code
+        </span>
+        <span
+          className={cn(
+            "ml-1 inline-flex h-5 shrink-0 items-center rounded-full px-1.5 text-xs font-medium leading-none sm:h-4 sm:text-3xs",
+            onBackdrop ? "bg-white/15 text-white" : "bg-secondary text-secondary-foreground",
+          )}
+        >
+          {APP_FORK_LABEL}
         </span>
       </span>
     </Link>
