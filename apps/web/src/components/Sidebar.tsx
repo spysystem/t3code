@@ -122,6 +122,7 @@ import { isCommandPaletteOpen, openCommandPalette } from "../commandPaletteBus";
 import { startNewThreadFromContext } from "../lib/chatThreadActions";
 import { useClientSettings } from "../hooks/useSettings";
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
+import { useCopyNativeThreadId } from "../hooks/useCopyNativeThreadId";
 import { useLocalStorage } from "../hooks/useLocalStorage";
 import { useNowMinute } from "../hooks/useNowMinute";
 import { useEnvironments, usePrimaryEnvironmentId } from "../state/environments";
@@ -2193,6 +2194,7 @@ export default function Sidebar() {
       );
     },
   });
+  const copyNativeThreadId = useCopyNativeThreadId();
   const { copyToClipboard: copyThreadIdToClipboard } = useCopyToClipboard<{ threadId: ThreadId }>({
     onCopy: ({ threadId }) => {
       toastManager.add({
@@ -4032,6 +4034,9 @@ export default function Sidebar() {
                 snooze: supportsSnooze,
                 pinning: supportsPinning,
                 titleRegeneration: supportsTitleRegeneration,
+                nativeThreadId:
+                  serverConfigs.get(thread.environmentId)?.environment.capabilities
+                    .nativeThreadId === true,
               },
               snoozePresets,
             }),
@@ -4142,6 +4147,9 @@ export default function Sidebar() {
           case "copy-thread-id":
             copyThreadIdToClipboard(thread.id, { threadId: thread.id });
             return;
+          case "copy-native-thread-id":
+            await copyNativeThreadId(threadRef);
+            return;
           case "archive": {
             if (confirmThreadArchive) {
               const confirmed = await settlePromise(() =>
@@ -4215,6 +4223,7 @@ export default function Sidebar() {
       copyBranchToClipboard,
       copyPathToClipboard,
       copyThreadIdToClipboard,
+      copyNativeThreadId,
       deleteThread,
       handleMultiSelectContextMenu,
       markThreadUnread,

@@ -198,6 +198,8 @@ import {
 import { sortThreads } from "../lib/threadSort";
 import { SidebarChromeFooter, SidebarChromeHeader } from "./sidebar/SidebarChrome";
 import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
+import { useCopyNativeThreadId } from "~/hooks/useCopyNativeThreadId";
+import { readEnvironmentSupportsNativeThreadId } from "../state/entities";
 import { useIsMobile } from "~/hooks/useMediaQuery";
 import { CommandDialogTrigger } from "./ui/command";
 import { useClientSettings, useUpdateClientSettings } from "~/hooks/useSettings";
@@ -1204,6 +1206,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
   const clearSelection = useThreadSelectionStore((state) => state.clearSelection);
   const removeFromSelection = useThreadSelectionStore((state) => state.removeFromSelection);
   const setSelectionAnchor = useThreadSelectionStore((state) => state.setAnchor);
+  const copyNativeThreadId = useCopyNativeThreadId();
   const { copyToClipboard: copyThreadIdToClipboard } = useCopyToClipboard<{
     threadId: ThreadId;
   }>({
@@ -2248,7 +2251,10 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
           { id: "rename", label: "Rename thread" },
           { id: "mark-unread", label: "Mark unread" },
           { id: "copy-path", label: "Copy Path" },
-          { id: "copy-thread-id", label: "Copy Thread ID" },
+          { id: "copy-thread-id", label: "Copy T3 thread ID" },
+          ...(readEnvironmentSupportsNativeThreadId(thread.environmentId)
+            ? [{ id: "copy-native-thread-id", label: "Copy native thread ID" }]
+            : []),
           { id: "project-settings", label: "Project settings" },
           { id: "delete", label: "Delete", destructive: true, icon: "trash" },
         ],
@@ -2315,6 +2321,10 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
         copyThreadIdToClipboard(thread.id, { threadId: thread.id });
         return;
       }
+      if (clicked === "copy-native-thread-id") {
+        await copyNativeThreadId(threadRef);
+        return;
+      }
       if (clicked !== "delete") return;
       if (appSettingsConfirmThreadDelete) {
         const confirmed = await api.dialogs.confirm(
@@ -2344,6 +2354,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
       appSettingsConfirmThreadDelete,
       copyPathToClipboard,
       copyThreadIdToClipboard,
+      copyNativeThreadId,
       deleteThread,
       handleNewThread,
       isMobile,
