@@ -240,6 +240,12 @@ export function createThreadEnvironmentAtoms<R, E>(
       scheduler,
       concurrency,
     }),
+    getNativeThreadId: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:commands:thread:get-native-thread-id",
+      tag: WS_METHODS.providerGetNativeThreadId,
+      scheduler,
+      concurrency,
+    }),
     uploadFeedback: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:commands:thread:upload-feedback",
       tag: WS_METHODS.providerUploadFeedback,
