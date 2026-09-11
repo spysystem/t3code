@@ -1,6 +1,7 @@
 import Constants from "expo-constants";
 import type { NativeStackNavigationOptions } from "@react-navigation/native-stack";
 import { Platform, View } from "react-native";
+import { formatAppVariantLabel } from "@t3tools/shared/branding";
 
 import { AppText as Text } from "./AppText";
 import { T3Wordmark } from "./T3Wordmark";
@@ -30,7 +31,7 @@ export function CompactBrandTitle(
   return (
     <View
       aria-level={1}
-      accessibilityLabel="T3 Code, Threads"
+      accessibilityLabel="T3 Code (SPY), Threads"
       accessible
       role="heading"
       className="flex-row items-center gap-1.5"
@@ -48,7 +49,7 @@ export function CompactBrandTitle(
           allowFontScaling={props.allowFontScaling}
           className="font-t3-bold text-[9px] tracking-[0.9px] text-foreground-muted uppercase"
         >
-          {stageLabel}
+          {formatAppVariantLabel(stageLabel)}
         </Text>
       </View>
     </View>
