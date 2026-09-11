@@ -13,6 +13,7 @@ import { SymbolView } from "../../components/AppSymbol";
 import { T3Wordmark } from "../../components/T3Wordmark";
 import { HOME_HORIZONTAL_INSET } from "../../lib/layoutMetrics";
 import { resolveMobileStageLabel } from "../../lib/mobileBranding";
+import { formatAppVariantLabel } from "@t3tools/shared/branding";
 import { useUniwindTheme } from "../../lib/useUniwindTheme";
 import { useThreadListV2Enabled } from "../threads/use-thread-list-v2-enabled";
 import { useHardwareKeyboardCommand } from "../keyboard/hardwareKeyboardCommands";
@@ -228,7 +229,7 @@ function AndroidHomeHeader(props: HomeHeaderProps) {
                   </RNText>
                   <View className="rounded-full bg-subtle px-2 py-0.75">
                     <RNText className="text-[11px] font-t3-bold tracking-[1.1px] text-foreground-muted uppercase">
-                      {stageLabel}
+                      {formatAppVariantLabel(stageLabel)}
                     </RNText>
                   </View>
                 </View>
