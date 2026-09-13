@@ -555,6 +555,8 @@ export function UsagePage() {
                     />
                   ) : null
                 }
+                paceMode={preferences.paceMode ?? "all"}
+                onPaceModeChange={(paceMode) => updatePreferences({ paceMode })}
               />
             ) : shown === null ? (
               <UsageSkeleton />
