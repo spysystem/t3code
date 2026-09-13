@@ -521,6 +521,8 @@ export function UsagePage() {
                 selectedEnvironmentIds={selectedEnvironmentIds}
                 hiddenProviders={hiddenProviders}
                 now={limitsNow}
+                paceMode={preferences.paceMode ?? "all"}
+                onPaceModeChange={(paceMode) => updatePreferences({ paceMode })}
               />
             ) : shown === null ? (
               <UsageSkeleton />
