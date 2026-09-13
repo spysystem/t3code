@@ -12251,5 +12251,13 @@
   "713f30716f81d8b0": "Native thread ID copied",
   "1bb83e00b15ee30c": "Failed to copy native thread ID",
   "f88b0907e6780beb": "Clipboard API is unavailable while copying the native thread ID.",
-  "c2a9ee49e1d1c666": "Failed to copy the native thread ID to the clipboard."
+  "c2a9ee49e1d1c666": "Failed to copy the native thread ID to the clipboard.",
+  "70cf8193b4307e01": "{pace} · {used}% used / {elapsed}% of workdays elapsed",
+  "6b93e7d4b99a14eb": "{pace} · {used}% used / {elapsed}% of window elapsed",
+  "dfbc935a8be23b4e": "Limit pace",
+  "01c69286f592ff5e": "Pace",
+  "437bae1028fe455b": "All days",
+  "fd883b0b9ea5c01c": "Workdays (Mon–Fri)",
+  "347fc62c09882004": "Weekly pace skips weekends in your local timezone.",
+  "943f01abb699cb6e": "Accounts with known windows:"
 }
