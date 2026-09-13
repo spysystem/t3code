@@ -24,6 +24,15 @@ afterEach(() => {
 });
 
 describe("Usage page preferences", () => {
+  it("preserves old preferences and remembers both pace modes", () => {
+    values.set(key, '{"metric":"limits","windowDays":7}');
+    expect(readUsagePagePreferences()).toEqual({ metric: "limits", windowDays: 7 });
+    for (const paceMode of ["workdays", "all"] as const) {
+      saveUsagePagePreferences({ ...readUsagePagePreferences(), paceMode });
+      expect(readUsagePagePreferences()).toEqual({ metric: "limits", windowDays: 7, paceMode });
+    }
+  });
+
   it("uses defaults when no preference has been saved", () => {
     expect(readUsagePagePreferences()).toEqual({ metric: "limits", windowDays: 30 });
   });

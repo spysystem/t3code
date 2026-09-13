@@ -6,11 +6,14 @@ import {
   collectLimitPools,
   cursorUsageWindowDetails,
   displayLimitWindows,
+  elapsedShare,
   formatResetsIn,
   type LimitAccount,
   type LimitPool,
   type LimitPoolMember,
   type LimitPoolWindow,
+  type LimitPaceMode,
+  paceOf,
   paceRemainingPercent,
   remainingPercent,
 } from "@t3tools/shared/usageLimits";
@@ -41,6 +44,7 @@ import { Alert, AlertTitle } from "../ui/alert";
 import { Popover, PopoverCreateHandle, PopoverPopup, PopoverTrigger } from "../ui/popover";
 import {
   PaceIcon,
+  PaceSummary,
   ResetCreditDialog,
   barColor,
   resetCreditsSummary,
@@ -139,6 +143,7 @@ function SegmentPopover({
   now,
   redeem,
   onRedeem,
+  paceMode,
 }: {
   readonly account: LimitAccount;
   readonly window: LimitPoolMember["window"];
@@ -146,11 +151,14 @@ function SegmentPopover({
   readonly now: number;
   readonly redeem: ReturnType<typeof useResetCredit> | null;
   readonly onRedeem: () => void;
+  readonly paceMode: LimitPaceMode;
 }) {
   const timestampFormat = usePrimarySettings((settings) => settings.timestampFormat);
   const remaining = remainingPercent(window);
-  const timeLeft = paceRemainingPercent(window, now);
+  const timeLeft = paceRemainingPercent(window, now, paceMode);
   const resetsIn = formatResetsIn(window, now);
+  const elapsed = elapsedShare(window, now, paceMode);
+  const pace = paceOf(window, now, paceMode);
   const where =
     account.environments.length > 0
       ? account.environments.map((environment) => environment.label).join(", ")
@@ -184,6 +192,14 @@ function SegmentPopover({
       </div>
       <div className="flex flex-col gap-1 border-t border-border/60 pt-2.5">
         <Row label="Left">{remaining}%</Row>
+        {pace && elapsed !== null ? (
+          <PaceSummary
+            pace={pace}
+            usedPercent={window.usedPercent}
+            elapsed={elapsed}
+            workdays={paceMode === "workdays" && window.kind === "weekly"}
+          />
+        ) : null}
         {window.resetsAt ? (
           <Row label="Resets">
             {formatUpcomingTimestamp(window.resetsAt, timestampFormat, now)}
@@ -220,7 +236,7 @@ function SegmentPopover({
  * segment moves it instead of opening a second one. The payload is the segment
  * it currently describes.
  */
-type SegmentPayload = Omit<Parameters<typeof SegmentPopover>[0], "now" | "onRedeem">;
+type SegmentPayload = Omit<Parameters<typeof SegmentPopover>[0], "now" | "onRedeem" | "paceMode">;
 const SegmentPopoverContext = createContext<ReturnType<
   typeof PopoverCreateHandle<SegmentPayload>
 > | null>(null);
@@ -231,12 +247,14 @@ function ActiveSegmentPopover({
   payload,
   pools,
   now,
+  paceMode,
 }: {
   readonly handle: ReturnType<typeof PopoverCreateHandle<SegmentPayload>>;
   readonly actions: RefObject<PopoverPrimitive.Root.Actions | null>;
   readonly payload: SegmentPayload;
   readonly pools: readonly LimitPool[];
   readonly now: number;
+  readonly paceMode: LimitPaceMode;
 }) {
   const available = pools.some((pool) =>
     displayLimitWindows(pool).some((window) =>
@@ -262,6 +280,7 @@ function ActiveSegmentPopover({
       <SegmentPopover
         {...payload}
         now={now}
+        paceMode={paceMode}
         onRedeem={() => {
           handle.close();
           payload.redeem?.setConfirming(true);
@@ -288,6 +307,7 @@ function PoolSegment({
   readonly index: number;
   readonly labeled: boolean;
   readonly showAccountName: boolean;
+  readonly paceMode: LimitPaceMode;
 }) {
   return account.redeem ? (
     <RedeemableSegment account={account} redeemAt={account.redeem} {...props} />
@@ -334,6 +354,7 @@ function SegmentTriggers({
   index,
   labeled,
   showAccountName,
+  paceMode,
 }: SegmentPayload & {
   readonly refillPercent: number;
   readonly color: string;
@@ -341,11 +362,13 @@ function SegmentTriggers({
   readonly index: number;
   readonly labeled: boolean;
   readonly showAccountName: boolean;
+  readonly paceMode: LimitPaceMode;
 }) {
   const popover = use(SegmentPopoverContext) ?? undefined;
   const payload: SegmentPayload = { account, window, reset, redeem };
   const remaining = remainingPercent(window);
-  const timeLeft = paceRemainingPercent(window, now);
+  const timeLeft = paceRemainingPercent(window, now, paceMode);
+  const period = paceMode === "workdays" && window.kind === "weekly" ? "workdays" : "the window";
   const resetsIn = formatResetsIn(window, now);
   const credits = account.limits.resetCredits?.availableCount ?? 0;
   return (
@@ -358,7 +381,7 @@ function SegmentTriggers({
           <button
             type="button"
             style={{ gridColumn: index, gridRow: 1 }}
-            aria-label={`${account.displayName ?? (account.email ? accountInitials(account.email) : account.driver)}: ${remaining}% left${resetsIn ? `, ${resetsIn}` : ""}${timeLeft === null ? "" : `, ${timeLeft}% of the window left`}${credits ? `, ${credits} reset ${credits === 1 ? "credit" : "credits"} banked` : ""}`}
+            aria-label={`${account.displayName ?? (account.email ? accountInitials(account.email) : account.driver)}: ${remaining}% left${resetsIn ? `, ${resetsIn}` : ""}${timeLeft === null ? "" : `, ${timeLeft}% of ${period} left`}${credits ? `, ${credits} reset ${credits === 1 ? "credit" : "credits"} banked` : ""}`}
             className={cn(
               "relative min-w-0 cursor-pointer rounded-md bg-muted text-start outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background data-[popup-open]:ring-1 data-[popup-open]:ring-inset data-[popup-open]:ring-border",
               labeled ? "h-8" : "h-5",
@@ -500,10 +523,12 @@ function PoolBar({
   pool,
   color,
   now,
+  paceMode,
 }: {
   readonly pool: LimitPoolWindow;
   readonly color: string;
   readonly now: number;
+  readonly paceMode: LimitPaceMode;
 }) {
   const restores = new Map(pool.resets.map((reset) => [reset.member.account.key, reset]));
   const columns = pool.columns.length;
@@ -546,6 +571,7 @@ function PoolBar({
               index={position + 1}
               labeled={labeled}
               showAccountName={columns > 1}
+              paceMode={paceMode}
             />
           ) : null,
         )}
@@ -560,12 +586,14 @@ function PoolWindowCard({
   now,
   label,
   description,
+  paceMode,
 }: {
   readonly pool: LimitPoolWindow;
   readonly color: string;
   readonly now: number;
   readonly label?: string | undefined;
   readonly description?: string | undefined;
+  readonly paceMode: LimitPaceMode;
 }) {
   const nextRefill = pool.resets.find((reset) => reset.restoresPercent > 0);
   return (
@@ -587,7 +615,22 @@ function PoolWindowCard({
           </span>
         ) : null}
       </div>
-      <PoolBar pool={pool} color={color} now={now} />
+      <div className="flex min-w-0 flex-col gap-2">
+        <PoolBar pool={pool} color={color} now={now} paceMode={paceMode} />
+        {pool.pace && pool.elapsedShare !== null && pool.paceUsedPercent !== null ? (
+          <div className="text-xs text-muted-foreground">
+            {pool.members.some(({ window }) => elapsedShare(window, now, paceMode) === null)
+              ? "Accounts with known windows: "
+              : null}
+            <PaceSummary
+              pace={pool.pace}
+              usedPercent={pool.paceUsedPercent}
+              elapsed={pool.elapsedShare}
+              workdays={paceMode === "workdays" && pool.kind === "weekly"}
+            />
+          </div>
+        ) : null}
+      </div>
       {description ? (
         <p className="text-xs text-muted-foreground md:col-span-2">{description}</p>
       ) : null}
@@ -595,7 +638,15 @@ function PoolWindowCard({
   );
 }
 
-function PoolSection({ pool, now }: { readonly pool: LimitPool; readonly now: number }) {
+function PoolSection({
+  pool,
+  now,
+  paceMode,
+}: {
+  readonly pool: LimitPool;
+  readonly now: number;
+  readonly paceMode: LimitPaceMode;
+}) {
   const color = barColor(pool.driver);
   const label = providerClients.get(pool.driver)?.label ?? String(pool.driver);
   const windows = displayLimitWindows(pool);
@@ -621,6 +672,7 @@ function PoolSection({ pool, now }: { readonly pool: LimitPool; readonly now: nu
             now={now}
             label={details?.label}
             description={details?.description}
+            paceMode={paceMode}
           />
         );
       })}
@@ -632,14 +684,16 @@ export function UsageLimitsPooled({
   presentations,
   now,
   cursorPrompt,
+  paceMode = "all",
 }: {
   readonly presentations: Parameters<typeof collectLimitAccounts>[0];
   readonly now: number;
   readonly cursorPrompt?: ReactNode;
+  readonly paceMode?: LimitPaceMode;
 }) {
   const [segmentPopover] = useState(() => PopoverCreateHandle<SegmentPayload>());
   const segmentPopoverActions = useRef<PopoverPrimitive.Root.Actions | null>(null);
-  const pools = collectLimitPools(collectLimitAccounts(presentations), now);
+  const pools = collectLimitPools(collectLimitAccounts(presentations), now, paceMode);
   const notices = collectLimitNotices(presentations);
   const externalLinks = collectExternalUsageLinks(presentations);
   const cursorPromptAt =
@@ -658,7 +712,7 @@ export function UsageLimitsPooled({
         {pools.map((pool, index) => (
           <Fragment key={pool.driver}>
             {index === cursorPromptAt ? cursorPrompt : null}
-            <PoolSection pool={pool} now={now} />
+            <PoolSection pool={pool} now={now} paceMode={paceMode} />
           </Fragment>
         ))}
       </SegmentPopoverContext>
@@ -671,6 +725,7 @@ export function UsageLimitsPooled({
               payload={payload}
               pools={pools}
               now={now}
+              paceMode={paceMode}
             />
           ) : null
         }
