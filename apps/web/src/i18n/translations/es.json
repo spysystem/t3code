@@ -13025,5 +13025,13 @@
   "6148e3a78ba14a66": "Native thread ID unavailable",
   "6a04e336c78ea8cb": "This thread does not have a saved native provider ID.",
   "713f30716f81d8b0": "Native thread ID copied",
-  "1bb83e00b15ee30c": "Failed to copy native thread ID"
+  "1bb83e00b15ee30c": "Failed to copy native thread ID",
+  "70cf8193b4307e01": "{pace} · {used}% used / {elapsed}% of workdays elapsed",
+  "6b93e7d4b99a14eb": "{pace} · {used}% used / {elapsed}% of window elapsed",
+  "dfbc935a8be23b4e": "Limit pace",
+  "01c69286f592ff5e": "Pace",
+  "437bae1028fe455b": "All days",
+  "fd883b0b9ea5c01c": "Workdays (Mon–Fri)",
+  "347fc62c09882004": "Weekly pace skips weekends in your local timezone.",
+  "943f01abb699cb6e": "Accounts with known windows:"
 }
