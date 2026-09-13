@@ -3,6 +3,7 @@ import type { TimestampFormat } from "@t3tools/contracts/settings";
 import { limitsNotice } from "@t3tools/shared/usageLimitsCopy";
 import { msg, T, useGT, useMessages } from "gt-react";
 import { GaugeIcon } from "lucide-react";
+import { useState } from "react";
 
 import { m, type MessageResolver } from "../../i18n/messages";
 import { ensureLocalApi } from "../../localApi";
@@ -11,6 +12,7 @@ import { Button } from "../ui/button";
 import { providerClients } from "../settings/providerDriverMeta";
 import { RedactedSensitiveText } from "../settings/RedactedSensitiveText";
 import { LimitWindows, ResetCredits } from "../usage/UsageLimits";
+import { readUsagePagePreferences } from "../usage/usagePagePreferences";
 import { ComposerBanner } from "./ComposerBanner";
 import type { ComposerBannerStackItem } from "./ComposerBannerStack";
 
@@ -135,6 +137,7 @@ function UsageLimitsBannerBody({
 }) {
   const messages = useMessages();
   const now = Date.parse(report.createdAt);
+  const [preferences] = useState(readUsagePagePreferences);
   return (
     <ComposerBanner.Scroll>
       <ComposerBanner.Body className="flex flex-col gap-2 pt-1 pb-1.5 pe-2">
@@ -160,6 +163,7 @@ function UsageLimitsBannerBody({
                   accentColor={account.accentColor}
                   windows={account.limits.windows}
                   now={now}
+                  paceMode={preferences.paceMode ?? "all"}
                 />
               )}
               {externalUsage ? (
