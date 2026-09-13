@@ -24,6 +24,15 @@ afterEach(() => {
 });
 
 describe("Usage page preferences", () => {
+  it("preserves old preferences and remembers both pace modes", () => {
+    values.set(key, '{"metric":"limits","windowDays":7}');
+    expect(readUsagePagePreferences()).toEqual({ metric: "limits", windowDays: 7 });
+    for (const paceMode of ["workdays", "all"] as const) {
+      saveUsagePagePreferences({ ...readUsagePagePreferences(), paceMode });
+      expect(readUsagePagePreferences()).toEqual({ metric: "limits", windowDays: 7, paceMode });
+    }
+  });
+
   it("round-trips hidden providers and reads older saves without them", () => {
     saveUsagePagePreferences({ metric: "cost", windowDays: 7, hiddenProviders: ["codex"] });
     expect(readUsagePagePreferences().hiddenProviders).toEqual(["codex"]);
