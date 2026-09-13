@@ -268,6 +268,8 @@ export interface LimitPoolWindow {
   readonly remainingPercent: number;
   readonly usedPercent: number;
   readonly pace: LimitPace | null;
+  readonly paceUsedPercent: number | null;
+  readonly elapsedShare: number | null;
   readonly resets: ReadonlyArray<{
     readonly member: LimitPoolMember;
     readonly at: number;
@@ -305,6 +307,7 @@ const WINDOW_KIND_ORDER: Record<ServerProviderUsageWindow["kind"], number> = {
 export function collectLimitPools(
   accounts: readonly LimitAccount[],
   now: number,
+  paceMode: LimitPaceMode = "all",
 ): readonly LimitPool[] {
   const byDriver = new Map<ServerProvider["driver"], LimitAccount[]>();
   for (const account of accounts) {
@@ -328,7 +331,7 @@ export function collectLimitPools(
         accountSortName(left).localeCompare(accountSortName(right)) ||
         left.key.localeCompare(right.key),
     );
-    return { driver, accounts: sorted, windows: poolWindows(sorted, now) };
+    return { driver, accounts: sorted, windows: poolWindows(sorted, now, paceMode) };
   });
 }
 
@@ -336,7 +339,11 @@ function accountSortName(account: LimitAccount): string {
   return (account.displayName ?? account.email ?? account.key).toLowerCase();
 }
 
-function poolWindows(accounts: readonly LimitAccount[], now: number): readonly LimitPoolWindow[] {
+function poolWindows(
+  accounts: readonly LimitAccount[],
+  now: number,
+  paceMode: LimitPaceMode,
+): readonly LimitPoolWindow[] {
   const byKey = new Map<string, LimitPoolMember[]>();
   for (const account of accounts) {
     for (const window of account.limits.windows) {
@@ -354,7 +361,7 @@ function poolWindows(accounts: readonly LimitAccount[], now: number): readonly L
     // members that have a clock; a window with no reset would otherwise
     // count as spend with no time elapsed and skew the verdict.
     const timed = members.flatMap((m) => {
-      const share = elapsedShare(m.window, now);
+      const share = elapsedShare(m.window, now, paceMode);
       return share === null ? [] : [{ used: m.window.usedPercent, elapsed: share }];
     });
     const timedUsed = timed.reduce((sum, t) => sum + t.used, 0) / timed.length;
@@ -385,6 +392,8 @@ function poolWindows(accounts: readonly LimitAccount[], now: number): readonly L
       usedPercent: Math.round(usedPercent),
       remainingPercent: Math.round(100 - usedPercent),
       pace: meanElapsed === null ? null : paceOfShares(timedUsed, meanElapsed),
+      paceUsedPercent: meanElapsed === null ? null : timedUsed,
+      elapsedShare: meanElapsed,
       resets,
     };
   });
@@ -413,12 +422,41 @@ function resetMillis(window: ServerProviderUsageWindow): number | null {
   return Number.isFinite(at) ? at : null;
 }
 
+export type LimitPaceMode = "all" | "workdays";
+
+/** Weekday time in the client's local timezone, including partial days at either end. */
+function weekdayMillis(start: number, end: number): number {
+  let total = 0;
+  const timeZone = DateTime.zoneMakeLocal();
+  for (let cursor = start; cursor < end;) {
+    const day = DateTime.makeZonedUnsafe(cursor, { timeZone });
+    const weekday = DateTime.toParts(day).weekDay;
+    // Calendar arithmetic preserves local midnight across daylight-saving changes.
+    const midnight = DateTime.add(DateTime.startOf(day, "day"), { days: 1 });
+    const next = Math.min(DateTime.toEpochMillis(midnight), end);
+    if (weekday !== 0 && weekday !== 6) total += next - cursor;
+    cursor = next;
+  }
+  return total;
+}
+
 /** Elapsed share of the window, 0..1, or null when its length or reset is unknown. */
-export function elapsedShare(window: ServerProviderUsageWindow, now: number): number | null {
+export function elapsedShare(
+  window: ServerProviderUsageWindow,
+  now: number,
+  paceMode: LimitPaceMode = "all",
+): number | null {
   const resetsAt = resetMillis(window);
   if (resetsAt === null || window.windowDurationMins === undefined) return null;
   const length = window.windowDurationMins * MINUTE;
-  if (length <= 0) return null;
+  if (!Number.isFinite(length) || length <= 0 || !Number.isFinite(now)) return null;
+  if (paceMode === "workdays" && window.kind === "weekly") {
+    const start = resetsAt - length;
+    const total = weekdayMillis(start, resetsAt);
+    return total > 0
+      ? weekdayMillis(start, Math.max(start, Math.min(now, resetsAt))) / total
+      : null;
+  }
   return Math.max(0, Math.min(1, (length - (resetsAt - now)) / length));
 }
 
@@ -429,8 +467,12 @@ export type LimitPace = "ahead" | "on" | "under";
  * there is time left in the window; within five points of that counts as on
  * pace, further ahead means the window may run dry first.
  */
-export function paceOf(window: ServerProviderUsageWindow, now: number): LimitPace | null {
-  const elapsed = elapsedShare(window, now);
+export function paceOf(
+  window: ServerProviderUsageWindow,
+  now: number,
+  paceMode: LimitPaceMode = "all",
+): LimitPace | null {
+  const elapsed = elapsedShare(window, now, paceMode);
   return elapsed === null ? null : paceOfShares(window.usedPercent, elapsed);
 }
 

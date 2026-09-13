@@ -70,6 +70,13 @@ Opening Limits checks the selected connected environments automatically. Each cl
 least five minutes between automatic checks of an environment, including after a failed check.
 If a window still looks stale, refresh Limits to re-check every provider and hub.
 
+On web and desktop, choose **Pace → Workdays (Mon–Fri)** to budget weekly limits across weekdays.
+Pace skips weekends in your local timezone and follows each account's actual reset window,
+including partial days. Weekend usage still counts; quota, reset countdowns, and session pacing
+stay the same. The line in each bar marks the quota expected to remain at an even pace.
+Your choice is remembered on this device and also applies to the composer's limits panel.
+Choose **All days** to return to pacing across the full week.
+
 Pick `/usage-limits` from the composer's command menu, or send it as a message, to check the
 current model's limits without leaving the conversation. The result opens above the composer and
 closes when you dismiss it or send your next message. It uses the same snapshot as **Usage → Limits**, so it does not run the agent or refresh
