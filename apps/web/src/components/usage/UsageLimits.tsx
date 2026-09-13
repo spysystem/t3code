@@ -13,6 +13,7 @@ import { normalizeProviderAccentColor } from "@t3tools/client-runtime/state/prov
 import { resetCreditFailureText } from "@t3tools/client-runtime/state/usage";
 import {
   type LimitPace,
+  type LimitPaceMode,
   paceOf,
   paceRemainingPercent,
   remainingPercent,
@@ -39,6 +40,7 @@ import {
   AlertDialogTitle,
 } from "../ui/alert-dialog";
 import { Button } from "../ui/button";
+import { Toggle, ToggleGroup } from "../ui/toggle-group";
 import { UsageLimitsPooled } from "./UsageLimitsPooled";
 import { formatResetsIn, resetCreditChoices } from "@t3tools/shared/usageLimitsCopy";
 import { PROVIDER_PRESENTATION } from "./usageProviders";
@@ -56,6 +58,29 @@ const PACE: Record<LimitPace, { readonly label: string; readonly icon: typeof Ga
   },
 };
 
+export function PaceSummary({
+  pace,
+  usedPercent,
+  elapsed,
+  workdays,
+}: {
+  readonly pace: LimitPace;
+  readonly usedPercent: number;
+  readonly elapsed: number;
+  readonly workdays: boolean;
+}) {
+  const gt = useGT();
+  const label =
+    pace === "on" ? gt("On pace") : pace === "ahead" ? gt("Ahead of pace") : gt("Under pace");
+  const values = { pace: label, used: Math.round(usedPercent), elapsed: Math.round(elapsed * 100) };
+  return (
+    <span className="text-xs text-muted-foreground tabular-nums">
+      {workdays
+        ? gt("{pace} · {used}% used / {elapsed}% of workdays elapsed", values)
+        : gt("{pace} · {used}% used / {elapsed}% of window elapsed", values)}
+    </span>
+  );
+}
 export function barColor(driver: ServerProvider["driver"]): string {
   const presentation = Object.values(PROVIDER_PRESENTATION).find(
     (entry) => entry.driverKind === driver,
@@ -124,16 +149,18 @@ function WindowBar({
   color,
   window,
   now,
+  paceMode,
 }: {
   readonly color: string;
   readonly window: ServerProviderUsageWindow;
   readonly now: number;
+  readonly paceMode: LimitPaceMode;
 }) {
   const timestampFormat = usePrimarySettings((settings) => settings.timestampFormat);
   const gt = useGT();
   const m = useMessages();
   const remaining = remainingPercent(window);
-  const timeLeft = paceRemainingPercent(window, now);
+  const timeLeft = paceRemainingPercent(window, now, paceMode);
   const [barRef, paceMark] = usePaceMark(timeLeft);
   const resetsIn = formatResetsIn(window, now, m);
   const resetsAt = window.resetsAt
@@ -220,12 +247,14 @@ export function LimitWindows({
   windows,
   now,
   compact = false,
+  paceMode = "all",
 }: {
   readonly driver: ServerProvider["driver"];
   readonly accentColor?: string | undefined;
   readonly windows: ReadonlyArray<ServerProviderUsageWindow>;
   readonly now: number;
   readonly compact?: boolean;
+  readonly paceMode?: LimitPaceMode;
 }) {
   const color = normalizeProviderAccentColor(accentColor) ?? barColor(driver);
   const gt = useGT();
@@ -239,7 +268,7 @@ export function LimitWindows({
       }
     >
       {windows.map((window) => {
-        const pace = paceOf(window, now);
+        const pace = paceOf(window, now, paceMode);
         const resetsIn = formatResetsIn(window, now, m);
         return (
           <Fragment key={window.id}>
@@ -249,7 +278,7 @@ export function LimitWindows({
                 {gt("{remaining}% left", { remaining: remainingPercent(window) })}
               </span>
             </span>
-            <WindowBar color={color} window={window} now={now} />
+            <WindowBar color={color} window={window} now={now} paceMode={paceMode} />
             <span className="flex items-center gap-2 text-xs whitespace-nowrap text-muted-foreground tabular-nums">
               {pace ? <PaceIcon pace={pace} /> : null}
               <span className="ms-auto shrink-0">{resetsIn ?? ""}</span>
@@ -388,11 +417,16 @@ export function UsageLimitsSection({
   selectedEnvironmentIds,
   hiddenProviders,
   now,
+  paceMode,
+  onPaceModeChange,
 }: {
   readonly selectedEnvironmentIds: ReadonlySet<EnvironmentId> | null;
   readonly hiddenProviders: ReadonlySet<UsageProviderKind>;
   readonly now: number;
+  readonly paceMode: LimitPaceMode;
+  readonly onPaceModeChange: (mode: LimitPaceMode) => void;
 }) {
+  const gt = useGT();
   const presentations = useAtomValue(environmentPresentations.presentationsWithProvidersAtom);
   const hiddenDrivers = new Set<ServerProvider["driver"]>(
     [...hiddenProviders].map((provider) => PROVIDER_PRESENTATION[provider].driverKind),
@@ -423,5 +457,35 @@ export function UsageLimitsSection({
       ];
     }),
   );
-  return <UsageLimitsPooled presentations={selected} now={now} />;
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs text-muted-foreground">
+          <T>Pace</T>
+        </span>
+        <ToggleGroup
+          aria-label={gt("Limit pace")}
+          variant="segmented"
+          value={[paceMode]}
+          onValueChange={(next) => {
+            const mode = next[0];
+            if (mode === "all" || mode === "workdays") onPaceModeChange(mode);
+          }}
+        >
+          <Toggle value="all">
+            <T>All days</T>
+          </Toggle>
+          <Toggle value="workdays">
+            <T>Workdays (Mon–Fri)</T>
+          </Toggle>
+        </ToggleGroup>
+        {paceMode === "workdays" ? (
+          <span className="text-xs text-muted-foreground">
+            <T>Weekly pace skips weekends in your local timezone.</T>
+          </span>
+        ) : null}
+      </div>
+      <UsageLimitsPooled presentations={selected} now={now} paceMode={paceMode} />
+    </div>
+  );
 }
