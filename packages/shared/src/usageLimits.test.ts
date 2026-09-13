@@ -5,7 +5,13 @@ import {
   type ServerProvider,
   UsageLimitSourceId,
 } from "@t3tools/contracts";
-import { describe, expect, it } from "vite-plus/test";
+import * as DateTime from "effect/DateTime";
+import { describe, expect, it, vi } from "vite-plus/test";
+
+vi.mock("effect/DateTime", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("effect/DateTime")>();
+  return { ...actual, zoneMakeLocal: vi.fn(actual.zoneMakeLocal) };
+});
 
 import {
   type LimitAccount,
@@ -74,6 +80,75 @@ describe("pace", () => {
     expect(formatResetsIn({ ...window, resetsAt: "2026-09-03T11:00:00.000Z" }, now)).toBe(
       "resets now",
     );
+  });
+});
+
+describe("workday pace", () => {
+  const local = (day: number, hour = 0) =>
+    DateTime.toEpochMillis(
+      DateTime.makeZonedUnsafe(
+        { year: 2026, month: 9, day, hour },
+        { timeZone: DateTime.zoneMakeLocal(), adjustForTimeZone: true },
+      ),
+    );
+  const week = {
+    ...window,
+    kind: "weekly",
+    usedPercent: 58,
+    windowDurationMins: 7 * 24 * 60,
+    resetsAt: DateTime.formatIso(DateTime.makeUnsafe(local(14))),
+  } as const;
+
+  it("compares three completed workdays with the five weekdays in the reset window", () => {
+    expect(elapsedShare(week, local(10), "workdays")).toBeCloseTo(0.6);
+    expect(paceOf(week, local(10), "workdays")).toBe("on");
+    expect(paceOf(week, local(10), "all")).toBe("ahead");
+    expect(remainingPercent(week)).toBe(42);
+  });
+
+  it("counts partial weekdays and clamps progress to the actual reset window", () => {
+    expect(elapsedShare(week, local(9, 12), "workdays")).toBeCloseTo(0.5);
+    expect(elapsedShare(week, local(6), "workdays")).toBe(0);
+    expect(elapsedShare(week, local(15), "workdays")).toBe(1);
+    const midweek = { ...week, resetsAt: DateTime.formatIso(DateTime.makeUnsafe(local(16, 12))) };
+    expect(elapsedShare(midweek, local(11), "workdays")).toBeCloseTo(0.3);
+    expect(elapsedShare(midweek, local(14, 12), "workdays")).toBeCloseTo(0.6);
+  });
+
+  it("pauses over weekends while still counting weekend spending", () => {
+    const midweek = { ...week, resetsAt: DateTime.formatIso(DateTime.makeUnsafe(local(16, 12))) };
+    for (const at of [local(12), local(12, 12), local(13, 12), local(14)]) {
+      expect(elapsedShare(midweek, at, "workdays")).toBeCloseTo(0.5);
+    }
+    expect(paceOf({ ...midweek, usedPercent: 50 }, local(12), "workdays")).toBe("on");
+    expect(paceOf({ ...midweek, usedPercent: 70 }, local(13), "workdays")).toBe("ahead");
+  });
+
+  it.each([
+    { reset: "2026-03-30T22:00:00Z", at: "2026-03-25T23:00:00Z", expected: 49 / 121 },
+    { reset: "2026-10-26T23:00:00Z", at: "2026-10-21T22:00:00Z", expected: 47 / 119 },
+  ])("uses local weekdays across daylight-saving changes: $reset", ({ reset, at, expected }) => {
+    vi.mocked(DateTime.zoneMakeLocal).withImplementation(
+      () => DateTime.zoneMakeNamedUnsafe("Europe/Copenhagen"),
+      () => {
+        expect(elapsedShare({ ...week, resetsAt: reset }, Date.parse(at), "workdays")).toBeCloseTo(
+          expected,
+        );
+      },
+    );
+  });
+
+  it("leaves nonweekly pace and reset countdowns unchanged", () => {
+    for (const kind of ["session", "monthly", "other"] as const) {
+      expect(elapsedShare({ ...week, kind }, local(10), "workdays")).toBe(
+        elapsedShare({ ...week, kind }, local(10)),
+      );
+    }
+    expect(formatResetsIn(week, local(10))).toBe("resets in 4d 0h");
+    expect(elapsedShare({ ...week, resetsAt: undefined }, local(10), "workdays")).toBeNull();
+    expect(
+      elapsedShare({ ...week, windowDurationMins: undefined }, local(10), "workdays"),
+    ).toBeNull();
   });
 });
 
@@ -620,6 +695,39 @@ describe("pooled account columns", () => {
     pool.windows.map((row) =>
       row.columns.map((member) => (member.window ? member.account.key : null)),
     );
+
+  it("combines each account's workday progress and excludes unknown clocks from the comparison", () => {
+    const local = (day: number) =>
+      DateTime.toEpochMillis(
+        DateTime.makeZonedUnsafe(
+          { year: 2026, month: 9, day },
+          { timeZone: DateTime.zoneMakeLocal(), adjustForTimeZone: true },
+        ),
+      );
+    const accounts = [
+      account("a", [
+        {
+          ...weekly,
+          usedPercent: 60,
+          resetsAt: DateTime.formatIso(DateTime.makeUnsafe(local(14))),
+        },
+      ]),
+      account("b", [
+        {
+          ...weekly,
+          usedPercent: 80,
+          resetsAt: DateTime.formatIso(DateTime.makeUnsafe(local(11))),
+        },
+      ]),
+      account("unknown", [{ ...weekly, usedPercent: 100, resetsAt: undefined }]),
+    ];
+    const [pool] = collectLimitPools(accounts, local(10), "workdays");
+    expect(pool?.windows[0]).toMatchObject({ pace: "on", paceUsedPercent: 70, elapsedShare: 0.7 });
+    const [allDays] = collectLimitPools(accounts, local(10));
+    expect(allDays?.windows[0]?.pace).toBe("ahead");
+    expect(pool?.windows[0]?.remainingPercent).toBe(allDays?.windows[0]?.remainingPercent);
+    expect(pool?.windows[0]?.resets).toEqual(allDays?.windows[0]?.resets);
+  });
 
   it("keeps session columns across rows with opposite reset and usage orders", () => {
     const accounts = [
