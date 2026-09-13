@@ -9,6 +9,7 @@ const UsagePagePreferencesSchema = Schema.Struct({
   windowDays: Schema.Literals([1, 7, 30, 90]),
   /** Providers filtered out of the page. Stored as hidden so new providers show by default. */
   hiddenProviders: Schema.optional(Schema.Array(UsageProviderKind)),
+  paceMode: Schema.optionalKey(Schema.Literals(["all", "workdays"])),
 });
 export type UsagePagePreferences = typeof UsagePagePreferencesSchema.Type;
 
