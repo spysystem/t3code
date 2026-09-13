@@ -1,10 +1,12 @@
 import type { EnvironmentId, UsageLimitsReport } from "@t3tools/contracts";
 import { limitsNotice } from "@t3tools/shared/usageLimits";
 import { GaugeIcon } from "lucide-react";
+import { useState } from "react";
 
 import { getDriverOption } from "../settings/providerDriverMeta";
 import { RedactedSensitiveText } from "../settings/RedactedSensitiveText";
 import { LimitWindows, ResetCredits } from "../usage/UsageLimits";
+import { readUsagePagePreferences } from "../usage/usagePagePreferences";
 import { ComposerBanner } from "./ComposerBanner";
 import type { ComposerBannerStackItem } from "./ComposerBannerStack";
 
@@ -77,6 +79,7 @@ function UsageLimitsBannerBody({
   readonly environmentId: EnvironmentId;
 }) {
   const now = Date.parse(report.createdAt);
+  const [preferences] = useState(readUsagePagePreferences);
   return (
     <ComposerBanner.Scroll>
       <ComposerBanner.Body className="flex flex-col gap-2 pt-1 pb-1.5 pe-2">
@@ -100,6 +103,7 @@ function UsageLimitsBannerBody({
                   driver={account.driver}
                   windows={account.limits.windows}
                   now={now}
+                  paceMode={preferences.paceMode ?? "all"}
                 />
               )}
               {resetCreditInput && account.limits.resetCredits ? (
