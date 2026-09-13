@@ -13,6 +13,7 @@ import {
   formatDuration,
   formatResetsIn,
   type LimitPace,
+  type LimitPaceMode,
   paceOf,
   remainingPercent,
 } from "@t3tools/shared/usageLimits";
@@ -35,14 +36,35 @@ import {
 } from "../ui/alert-dialog";
 import { Button } from "../ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { Toggle, ToggleGroup } from "../ui/toggle-group";
 import { UsageLimitsPooled } from "./UsageLimitsPooled";
 import { PROVIDER_PRESENTATION } from "./usageProviders";
 
 const PACE: Record<LimitPace, { readonly label: string; readonly icon: typeof GaugeIcon }> = {
-  ahead: { label: "Ahead of pace: spending faster than the window elapses", icon: TrendingUpIcon },
-  on: { label: "On pace with the window", icon: GaugeIcon },
+  ahead: { label: "Ahead of pace: spending faster than expected", icon: TrendingUpIcon },
+  on: { label: "On pace with expected spending", icon: GaugeIcon },
   under: { label: "Under pace: headroom left for the rest of the window", icon: TrendingDownIcon },
 };
+
+export function PaceSummary({
+  pace,
+  usedPercent,
+  elapsed,
+  workdays,
+}: {
+  readonly pace: LimitPace;
+  readonly usedPercent: number;
+  readonly elapsed: number;
+  readonly workdays: boolean;
+}) {
+  const label = pace === "on" ? "On pace" : pace === "ahead" ? "Ahead of pace" : "Under pace";
+  return (
+    <span className="text-xs text-muted-foreground tabular-nums">
+      {label} · {Math.round(usedPercent)}% used / {Math.round(elapsed * 100)}% of{" "}
+      {workdays ? "workdays" : "window"} elapsed
+    </span>
+  );
+}
 
 /** The series colour the cost chart uses for this driver, so the two views read as one. */
 export function barColor(driver: ServerProvider["driver"]): string {
@@ -82,14 +104,17 @@ function WindowBar({
   color,
   window,
   now,
+  paceMode,
 }: {
   readonly color: string;
   readonly window: ServerProviderUsageWindow;
   readonly now: number;
+  readonly paceMode: LimitPaceMode;
 }) {
   const timestampFormat = usePrimarySettings((settings) => settings.timestampFormat);
   const remaining = remainingPercent(window);
-  const elapsed = elapsedShare(window, now);
+  const elapsed = elapsedShare(window, now, paceMode);
+  const period = paceMode === "workdays" && window.kind === "weekly" ? "workdays" : "the window";
   // The fill is quota left, so the even-spending mark is the time left.
   const timeLeft = elapsed === null ? null : Math.round((1 - elapsed) * 100);
   const resetsIn = formatResetsIn(window, now);
@@ -97,7 +122,7 @@ function WindowBar({
     ? formatUpcomingTimestamp(window.resetsAt, timestampFormat, now)
     : null;
   const summary = `${window.label}: ${remaining}% left${
-    timeLeft === null ? "" : `, ${timeLeft}% of the window left`
+    timeLeft === null ? "" : `, ${timeLeft}% of ${period} left`
   }${resetsIn ? `, ${resetsIn}` : ""}`;
 
   return (
@@ -130,7 +155,7 @@ function WindowBar({
       <TooltipPopup side="top">
         <div className="flex flex-col gap-0.5">
           <span className="text-foreground">
-            {remaining}% left{timeLeft !== null ? ` · ${timeLeft}% of the window left` : ""}
+            {remaining}% left{timeLeft !== null ? ` · ${timeLeft}% of ${period} left` : ""}
           </span>
           {timeLeft !== null ? (
             <span className="text-muted-foreground">The line is where even spending would be.</span>
@@ -156,11 +181,13 @@ export function LimitWindows({
   windows,
   now,
   compact = false,
+  paceMode = "all",
 }: {
   readonly driver: ServerProvider["driver"];
   readonly windows: ReadonlyArray<ServerProviderUsageWindow>;
   readonly now: number;
   readonly compact?: boolean;
+  readonly paceMode?: LimitPaceMode;
 }) {
   const color = barColor(driver);
   return (
@@ -172,7 +199,7 @@ export function LimitWindows({
       }
     >
       {windows.map((window) => {
-        const pace = paceOf(window, now);
+        const pace = paceOf(window, now, paceMode);
         const resetsIn = formatResetsIn(window, now);
         return (
           <Fragment key={window.id}>
@@ -182,7 +209,7 @@ export function LimitWindows({
                 {remainingPercent(window)}% left
               </span>
             </span>
-            <WindowBar color={color} window={window} now={now} />
+            <WindowBar color={color} window={window} now={now} paceMode={paceMode} />
             <span className="flex items-center gap-2 text-xs whitespace-nowrap text-muted-foreground tabular-nums">
               {pace ? <PaceIcon pace={pace} /> : null}
               <span className="ms-auto shrink-0">{resetsIn ?? ""}</span>
@@ -322,14 +349,42 @@ export function ResetCredits({
 export function UsageLimitsSection({
   selectedEnvironmentIds,
   now,
+  paceMode,
+  onPaceModeChange,
 }: {
   readonly selectedEnvironmentIds: ReadonlySet<EnvironmentId> | null;
   readonly now: number;
+  readonly paceMode: LimitPaceMode;
+  readonly onPaceModeChange: (mode: LimitPaceMode) => void;
 }) {
   const presentations = useAtomValue(environmentPresentations.presentationsAtom);
   const selected =
     selectedEnvironmentIds === null
       ? presentations
       : new Map([...presentations].filter(([id]) => selectedEnvironmentIds.has(id)));
-  return <UsageLimitsPooled presentations={selected} now={now} />;
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs text-muted-foreground">Pace</span>
+        <ToggleGroup
+          aria-label="Limit pace"
+          variant="segmented"
+          value={[paceMode]}
+          onValueChange={(next) => {
+            const mode = next[0];
+            if (mode === "all" || mode === "workdays") onPaceModeChange(mode);
+          }}
+        >
+          <Toggle value="all">All days</Toggle>
+          <Toggle value="workdays">Workdays (Mon–Fri)</Toggle>
+        </ToggleGroup>
+        {paceMode === "workdays" ? (
+          <span className="text-xs text-muted-foreground">
+            Weekly pace skips weekends in your local timezone.
+          </span>
+        ) : null}
+      </div>
+      <UsageLimitsPooled presentations={selected} now={now} paceMode={paceMode} />
+    </div>
+  );
 }
