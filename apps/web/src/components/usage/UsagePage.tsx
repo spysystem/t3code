@@ -197,7 +197,7 @@ export function UsagePage() {
 
   const selectWindow = (days: number) => {
     if (!isUsageWindowDays(days)) return;
-    const nextPreferences = { metric, windowDays: days };
+    const nextPreferences = { ...preferences, metric, windowDays: days };
     setPreferences(nextPreferences);
     saveUsagePagePreferences(nextPreferences);
     setWindowSelection({
@@ -207,7 +207,7 @@ export function UsagePage() {
   };
   const selectMetric = (nextMetric: UsageMetric) => {
     if (nextMetric === "limits") setLimitsNow(Date.now());
-    const nextPreferences = { metric: nextMetric, windowDays };
+    const nextPreferences = { ...preferences, metric: nextMetric, windowDays };
     setPreferences(nextPreferences);
     saveUsagePagePreferences(nextPreferences);
   };
@@ -471,6 +471,12 @@ export function UsagePage() {
                     />
                   ) : null
                 }
+                paceMode={preferences.paceMode ?? "all"}
+                onPaceModeChange={(paceMode) => {
+                  const nextPreferences = { ...preferences, paceMode };
+                  setPreferences(nextPreferences);
+                  saveUsagePagePreferences(nextPreferences);
+                }}
               />
             ) : isPending ? (
               <UsageSkeleton />
