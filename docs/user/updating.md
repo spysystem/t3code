@@ -36,6 +36,28 @@ refused rather than running half-upgraded:
 
 Update the side the notice names, then reconnect.
 
+## SPY desktop releases
+
+The SPY Windows and Linux x64 and Apple Silicon Mac apps check for newer fork releases on
+startup and every four hours. Use **Check for updates** in the app menu or **Settings → About** to check
+manually. When an update is available, **View release on GitHub** opens its release
+page. On Windows, download the `.exe` under **Assets**, close T3 Code, and run the installer.
+On Fedora and Linux Mint, install T3 Code from the
+[SPY package repository](https://spysystem.github.io/t3code-packages/); the update notice then
+shows the command that updates it (`sudo dnf upgrade --refresh t3code`, or
+`sudo apt update && sudo apt install --only-upgrade t3code`), after which you restart T3 Code.
+If you used the AppImage before, remove it. On other Linux distributions, download the
+`.AppImage`, mark it executable, close T3 Code, and run the new file.
+On a Mac, quit T3 Code and rerun the build command from the release notes; it builds and
+installs the new release.
+The app does not download or install updates automatically.
+
+Dismissing an update notification hides it until a different version is available;
+the release remains accessible through Settings and the sidebar update button.
+Older SPY installations that report no configured update feed or Windows-only checks need one manual
+upgrade from [SPY releases](https://github.com/spysystem/t3code/releases) to gain
+these checks. Update checks refer to the desktop app on the machine you are using.
+
 ## Update a connected server
 
 The offered action depends on how the server runs:

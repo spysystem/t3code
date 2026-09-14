@@ -10,7 +10,10 @@ vi.mock("./ui/toast", () => ({
   toastManager: { add: testState.addToast },
 }));
 
-import { showDesktopUpdateDownloadedToast } from "./desktopUpdate.toast";
+import {
+  showDesktopUpdateDownloadedToast,
+  showManualUpdateCheckResult,
+} from "./desktopUpdate.toast";
 
 type ClickableElement = ReactElement<{ readonly onClick?: () => void }>;
 
@@ -63,6 +66,30 @@ function downloadedState(overrides: Partial<DesktopUpdateState> = {}): DesktopUp
 describe("showDesktopUpdateDownloadedToast", () => {
   beforeEach(() => {
     testState.addToast.mockReset();
+  });
+
+  it("distinguishes a failed manual check from being up to date", () => {
+    showManualUpdateCheckResult({
+      checked: true,
+      state: downloadedState({
+        manual: true,
+        status: "error",
+        errorContext: "check",
+        message: "GitHub is unavailable.",
+      }),
+    });
+    expect(testState.addToast).toHaveBeenLastCalledWith({
+      type: "error",
+      title: "Could not check for updates",
+      description: "GitHub is unavailable.",
+    });
+    showManualUpdateCheckResult({
+      checked: true,
+      state: downloadedState({ manual: true, status: "up-to-date" }),
+    });
+    expect(testState.addToast).toHaveBeenLastCalledWith(
+      expect.objectContaining({ type: "success", title: "You're up to date" }),
+    );
   });
 
   it("opens the downloaded version's release notes", async () => {
