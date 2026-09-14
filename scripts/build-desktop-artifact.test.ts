@@ -1400,6 +1400,23 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         assert.instanceOf(error, WindowsPackagedPayloadValidationError);
         assert.equal(error.reason, "file-limit-exceeded");
         assert.isAbove(error.fileCount ?? 0, 2);
+
+        // SPY: prepared server bytecode from native Windows builds is outside the budget.
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const bytecode = path.join(fixture.packagedAppDir, "resources", "server-compile-cache");
+        yield* fs.makeDirectory(bytecode, { recursive: true });
+        for (const file of ["manifest.json", "0a1b2c3d", "4e5f6a7b"]) {
+          yield* fs.writeFileString(path.join(bytecode, file), "{}");
+        }
+        const withBytecode = yield* validateWindowsPackagedPayload({
+          stageDistDir: fixture.stageDistDir,
+          appExecutableName: fixture.appExecutableName,
+          targetArch: "x64",
+          appVersion: WINDOWS_PAYLOAD_FIXTURE_VERSION,
+          fileLimit: 2,
+        }).pipe(Effect.flip);
+        assert.equal(withBytecode.fileCount, error.fileCount);
       }),
     ),
   );
