@@ -35,6 +35,12 @@ import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
 import { normalizeDesktopUpdateReleaseNotes } from "./releaseNotes.ts";
 import { resolveDefaultDesktopUpdateChannel } from "./updateChannels.ts";
 import {
+  checkSpyRelease,
+  isSpyDesktopVersion,
+  isSpyUpdatePlatform,
+  spyPackageUpdateInstructions,
+} from "./spyRelease.ts";
+import {
   createInitialDesktopUpdateState,
   reduceDesktopUpdateStateOnCheckFailure,
   reduceDesktopUpdateStateOnCheckStart,
@@ -283,6 +289,10 @@ export const make = Effect.gen(function* () {
   const environment = yield* DesktopEnvironment.DesktopEnvironment;
   const fileSystem = yield* FileSystem.FileSystem;
   const desktopSettings = yield* DesktopAppSettings.DesktopAppSettings;
+  // SPY releases have one track. Windows installs them with electron-updater from
+  // the fork's GitHub releases; Linux and Mac only check for them (spyRelease.ts).
+  const spyRelease = isSpyDesktopVersion(environment.appVersion);
+  const manualUpdates = spyRelease && environment.platform !== "win32";
 
   const appUpdateYmlConfigRef = yield* Ref.make<Option.Option<AppUpdateYmlConfig>>(Option.none());
   const activeUpdateActionRef = yield* Ref.make<Option.Option<UpdateAction>>(Option.none());
@@ -335,21 +345,34 @@ export const make = Effect.gen(function* () {
 
   // The .deb carries electron-builder's resources/package-type marker.
   // electron-updater reads the same file and installs updates with dpkg.
-  const isDebPackage =
+  // SPY's .deb and .rpm carry it too, and their update text names the package manager.
+  const linuxPackageType =
     environment.platform === "linux" && environment.isPackaged
       ? yield* fileSystem
           .readFileString(environment.path.join(environment.resourcesPath, "package-type"))
           .pipe(
-            Effect.map((packageType) => packageType.trim() === "deb"),
-            Effect.orElseSucceed(() => false),
+            Effect.map((packageType) => packageType.trim()),
+            Effect.orElseSucceed(() => null),
           )
-      : false;
+      : null;
+  const isDebPackage = linuxPackageType === "deb";
 
   const hasUpdateFeedConfig = Ref.get(appUpdateYmlConfigRef).pipe(
     Effect.map((appUpdateYmlConfig) => Option.isSome(appUpdateYmlConfig) || config.mockUpdates),
   );
 
   const resolveDisabledReason = Effect.gen(function* () {
+    if (manualUpdates) {
+      return Option.fromNullishOr(
+        environment.isDevelopment || !environment.isPackaged
+          ? "SPY update checks are only available in packaged production builds."
+          : config.disableAutoUpdate
+            ? "Update checks are disabled by the T3CODE_DISABLE_AUTO_UPDATE setting."
+            : !isSpyUpdatePlatform(environment.platform, environment.runtimeInfo.appArch)
+              ? "SPY update checks currently support Linux x64 and Apple Silicon Mac builds."
+              : null,
+      );
+    }
     const hasFeedConfig = yield* hasUpdateFeedConfig;
     return Option.fromNullishOr(
       getAutoUpdateDisabledReason({
@@ -430,6 +453,29 @@ export const make = Effect.gen(function* () {
       yield* setState(reduceDesktopUpdateStateOnCheckStart(state, checkedAt));
       yield* logUpdaterInfo("checking for updates", { reason });
 
+      if (manualUpdates) {
+        return yield* checkSpyRelease(environment.appVersion, environment.platform).pipe(
+          Effect.flatMap((release) =>
+            updateState((current) => {
+              const { releaseUrl: _previousUrl, ...base } = current;
+              return release
+                ? {
+                    ...reduceDesktopUpdateStateOnUpdateAvailable(base, release.version, checkedAt),
+                    releaseUrl: release.url,
+                  }
+                : reduceDesktopUpdateStateOnNoUpdate(base, checkedAt);
+            }),
+          ),
+          Effect.as(true),
+          Effect.catchTags({
+            SpyReleaseCheckError: (error) =>
+              updateState((current) =>
+                reduceDesktopUpdateStateOnCheckFailure(current, error.message, checkedAt),
+              ).pipe(Effect.as(true)),
+          }),
+        );
+      }
+
       return yield* electronUpdater.checkForUpdates.pipe(
         Effect.as(true),
         Effect.catchTags({
@@ -459,6 +505,7 @@ export const make = Effect.gen(function* () {
   });
 
   const downloadAvailableUpdate = Effect.gen(function* () {
+    if (manualUpdates) return { accepted: false, completed: false };
     const state = yield* Ref.get(updateStateRef);
     if (!(yield* Ref.get(updaterConfiguredRef)) || state.status !== "available") {
       return { accepted: false, completed: false };
@@ -685,7 +732,7 @@ export const make = Effect.gen(function* () {
   const installWithExpectedVersion = Effect.fn("desktop.updates.install")(function* (
     expectedVersion?: string,
   ) {
-    if (yield* Ref.get(desktopState.quitting)) {
+    if (manualUpdates || (yield* Ref.get(desktopState.quitting))) {
       return {
         accepted: false,
         completed: false,
@@ -717,7 +764,7 @@ export const make = Effect.gen(function* () {
       }),
       Effect.forkScoped,
     );
-    yield* Effect.sleep(AUTO_UPDATE_POLL_INTERVAL).pipe(
+    yield* Effect.sleep(manualUpdates ? "4 hours" : AUTO_UPDATE_POLL_INTERVAL).pipe(
       Effect.andThen(checkForUpdates("poll")),
       Effect.forever,
       Effect.catchCause((cause) => {
@@ -907,6 +954,20 @@ export const make = Effect.gen(function* () {
     emitState,
     disabledReason: resolveDisabledReason,
     configure: Effect.gen(function* () {
+      if (manualUpdates) {
+        const disabledReason = yield* resolveDisabledReason;
+        const enabled = Option.isNone(disabledReason);
+        const updateInstructions = spyPackageUpdateInstructions(linuxPackageType);
+        yield* setState({
+          ...createBaseUpdateState("latest", enabled, environment),
+          manual: true,
+          ...(updateInstructions ? { updateInstructions } : {}),
+          message: Option.getOrNull(disabledReason),
+        });
+        yield* Ref.set(updaterConfiguredRef, enabled);
+        if (enabled) yield* startUpdatePollers;
+        return;
+      }
       const context = yield* Effect.context<never>();
       const runEffect = (effect: Effect.Effect<void>) => {
         void Effect.runPromiseWith(context)(effect);
@@ -923,8 +984,9 @@ export const make = Effect.gen(function* () {
       }
 
       const settings = yield* desktopSettings.get;
+      const channel = spyRelease ? "latest" : settings.updateChannel;
       const enabled = yield* shouldEnableAutoUpdates;
-      yield* setState(createBaseUpdateState(settings.updateChannel, enabled, environment));
+      yield* setState(createBaseUpdateState(channel, enabled, environment));
       if (!enabled) {
         return;
       }
@@ -932,7 +994,7 @@ export const make = Effect.gen(function* () {
 
       yield* electronUpdater.setAutoDownload(false);
       yield* electronUpdater.setAutoInstallOnAppQuit(false);
-      yield* applyAutoUpdaterChannel(settings.updateChannel);
+      yield* applyAutoUpdaterChannel(channel);
       yield* electronUpdater.setDisableDifferentialDownload(
         isArm64HostRunningIntelBuild(environment.runtimeInfo),
       );
@@ -971,6 +1033,7 @@ export const make = Effect.gen(function* () {
     setChannel: Effect.fn("desktop.updates.setChannel")(function* (
       nextChannel: DesktopUpdateChannel,
     ) {
+      if (spyRelease) return yield* Ref.get(updateStateRef);
       yield* Effect.annotateCurrentSpan({ channel: nextChannel });
       const activeAction = yield* tryStartChannelChange;
       if (Option.isSome(activeAction)) {
