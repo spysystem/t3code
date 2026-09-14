@@ -13080,5 +13080,8 @@
   "437bae1028fe455b": "All days",
   "fd883b0b9ea5c01c": "Workdays (Mon–Fri)",
   "347fc62c09882004": "Weekly pace skips weekends in your local timezone.",
-  "943f01abb699cb6e": "Accounts with known windows:"
+  "943f01abb699cb6e": "Accounts with known windows:",
+  "06cab9963e6a8a5b": "Clear environment filter",
+  "f6dd36e7cc2f9725": "Filter threads by environment",
+  "cc5d2f5ce8ee576e": "Environment"
 }
