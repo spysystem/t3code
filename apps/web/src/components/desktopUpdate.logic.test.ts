@@ -35,6 +35,20 @@ const baseState: DesktopUpdateState = {
 };
 
 describe("desktop update button state", () => {
+  it("opens a manual release even after a later check fails, without offering installation", () => {
+    const state = {
+      ...baseState,
+      manual: true,
+      status: "available" as const,
+      availableVersion: "0.0.41-spy.10",
+      releaseUrl: "https://github.com/spysystem/t3code/releases/tag/spy-v0.0.41-spy.10",
+    };
+    expect(resolveDesktopUpdateButtonAction(state)).toBe("release");
+    expect(getDesktopUpdateButtonTooltip(state)).toContain("View release on GitHub");
+    expect(resolveDesktopUpdateButtonAction({ ...state, status: "error" })).toBe("release");
+    expect(resolveDesktopUpdateButtonAction({ ...state, status: "checking" })).toBe("none");
+    expect(resolveDesktopUpdateButtonAction({ ...baseState, manual: true })).toBe("none");
+  });
   it("shows a download action when an update is available", () => {
     const state: DesktopUpdateState = {
       ...baseState,
