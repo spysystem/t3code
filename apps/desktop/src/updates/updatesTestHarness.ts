@@ -1,5 +1,5 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import type { DesktopUpdateState } from "@t3tools/contracts";
+import type { DesktopUpdateChannel, DesktopUpdateState } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as PlatformError from "effect/PlatformError";
@@ -18,6 +18,9 @@ import * as DesktopUpdates from "./DesktopUpdates.ts";
 export const flushCallbacks = Effect.yieldNow;
 
 export interface UpdatesHarnessOptions {
+  readonly appVersion?: string;
+  readonly processArch?: string;
+  readonly isPackaged?: boolean;
   readonly checkForUpdates?: Effect.Effect<
     void,
     ElectronUpdater.ElectronUpdaterCheckForUpdatesError
@@ -33,6 +36,8 @@ export interface UpdatesHarnessOptions {
   readonly platform?: NodeJS.Platform;
   readonly packageType?: string | undefined;
   readonly installRecord?: string | undefined;
+  /** A track the user saved earlier, for example while running an upstream nightly. */
+  readonly savedUpdateChannel?: DesktopUpdateChannel;
 }
 
 export function makeHarness(options: UpdatesHarnessOptions = {}) {
@@ -147,10 +152,10 @@ export function makeHarness(options: UpdatesHarnessOptions = {}) {
     dirname: "/repo/apps/desktop/src",
     homeDirectory: `/tmp/t3-desktop-updates-home-${process.pid}`,
     platform: options.platform ?? "darwin",
-    processArch: "x64",
-    appVersion: "1.2.3",
+    processArch: options.processArch ?? "x64",
+    appVersion: options.appVersion ?? "1.2.3",
     appPath: "/repo",
-    isPackaged: true,
+    isPackaged: options.isPackaged ?? true,
     resourcesPath: "/missing/resources",
     runningUnderArm64Translation: false,
   }).pipe(
@@ -169,10 +174,13 @@ export function makeHarness(options: UpdatesHarnessOptions = {}) {
 
   let testSettings: DesktopAppSettings.DesktopSettings = {
     ...DesktopAppSettings.DEFAULT_DESKTOP_SETTINGS,
+    ...(options.savedUpdateChannel
+      ? { updateChannel: options.savedUpdateChannel, updateChannelConfiguredByUser: true }
+      : {}),
   };
   const setUpdateChannelError = options.setUpdateChannelError;
   const layerSettings =
-    setUpdateChannelError || options.beforeSetUpdateChannel
+    setUpdateChannelError || options.beforeSetUpdateChannel || options.savedUpdateChannel
       ? Layer.succeed(DesktopAppSettings.DesktopAppSettings, {
           get: Effect.sync(() => testSettings),
           load: Effect.sync(() => testSettings),
@@ -215,7 +223,8 @@ export function makeHarness(options: UpdatesHarnessOptions = {}) {
         ? (installRecords.get(path) ?? previousInstallRecord)
         : undefined;
       if (installRecord !== undefined) return Effect.succeed(installRecord);
-      return path === "/missing/resources/package-type" && options.packageType !== undefined
+      return path.replaceAll("\\", "/") === "/missing/resources/package-type" &&
+        options.packageType !== undefined
         ? Effect.succeed(options.packageType)
         : Effect.fail(
             PlatformError.systemError({
