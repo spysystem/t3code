@@ -137,7 +137,10 @@ import {
   shouldShowArm64IntelBuildWarning,
   shouldToastDesktopUpdateActionResult,
 } from "./desktopUpdate.logic";
-import { showDesktopUpdateDownloadedToast } from "./desktopUpdate.toast";
+import {
+  openDesktopUpdateReleaseNotes,
+  showDesktopUpdateDownloadedToast,
+} from "./desktopUpdate.toast";
 import { Alert, AlertAction, AlertDescription, AlertTitle } from "./ui/alert";
 import { Button } from "./ui/button";
 import {
@@ -2881,7 +2884,7 @@ function SortableProjectItem({
 interface SidebarProjectsContentProps {
   showArm64IntelBuildWarning: boolean;
   arm64IntelBuildWarningDescription: string | null;
-  desktopUpdateButtonAction: "download" | "install" | "none";
+  desktopUpdateButtonAction: ReturnType<typeof resolveDesktopUpdateButtonAction>;
   desktopUpdateButtonDisabled: boolean;
   desktopUpdateActionPending: boolean;
   handleDesktopUpdateButtonClick: () => void;
@@ -3024,7 +3027,9 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
                 >
                   {desktopUpdateButtonAction === "download"
                     ? "Download ARM build"
-                    : "Install ARM build"}
+                    : desktopUpdateButtonAction === "release"
+                      ? "View release on GitHub"
+                      : "Install ARM build"}
                 </Button>
               </AlertAction>
             ) : null}
@@ -3672,6 +3677,10 @@ export default function LegacySidebar() {
   const handleDesktopUpdateButtonClick = useCallback(async () => {
     const bridge = window.desktopBridge;
     if (!bridge || !desktopUpdateState) return;
+    if (desktopUpdateButtonAction === "release" && desktopUpdateState.releaseUrl) {
+      await openDesktopUpdateReleaseNotes(bridge, desktopUpdateState.releaseUrl);
+      return;
+    }
     if (
       desktopUpdateButtonDisabled ||
       desktopUpdateButtonAction === "none" ||
