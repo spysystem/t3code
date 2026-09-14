@@ -12196,5 +12196,17 @@
   "27d76249d09eb69f": "Guide de revue prêt",
   "faa3bb26abb39c93": "Échec du guide de revue",
   "b7df38b7d8792d78": "Ouvrir le guide",
-  "9e91e9a77b664e4e": "Impossible de démarrer un guide de revue"
+  "9e91e9a77b664e4e": "Impossible de démarrer un guide de revue",
+  "793facda243f3898": "SPY update available: {version}. {instructions}",
+  "e43faff8fc529aac": "View release on GitHub.",
+  "5ed8384561dc9aff": "Please try again later.",
+  "963b07a02ff326cc": "You're up to date",
+  "21facf2181d69415": "{app} {version} is the newest available version.",
+  "b319a2dd61b9388d": "SPY update available: {version}",
+  "418e9699e3ea611e": "Quit T3 Code, then rerun the SPY Mac build script with --install.",
+  "804d632404546496": "Download the AppImage from GitHub, then close T3 Code and run it.",
+  "4f563dd87bd6f192": "Download and install it manually.",
+  "9c1cbc184f9f6e4f": "Checks GitHub for SPY releases. Installation is manual.",
+  "4187c9c24def9c63": "Could not switch to {track}",
+  "d516d22d499f7606": "Nightly follows upstream's nightly builds. A switch installs the next newer build on that track, so moving to Stable waits for its next release."
 }
