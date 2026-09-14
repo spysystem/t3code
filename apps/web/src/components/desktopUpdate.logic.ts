@@ -1,6 +1,6 @@
 import type { DesktopUpdateActionResult, DesktopUpdateState } from "@t3tools/contracts";
 
-export type DesktopUpdateButtonAction = "download" | "install" | "none";
+export type DesktopUpdateButtonAction = "download" | "install" | "release" | "none";
 
 const DESKTOP_RELEASE_HISTORY_URL = "https://github.com/pingdotgg/t3code/releases";
 const DESKTOP_RELEASE_TAG_URL = `${DESKTOP_RELEASE_HISTORY_URL}/tag`;
@@ -28,6 +28,11 @@ export function getDesktopUpdateReleaseHistoryUrl(): string {
 export function resolveDesktopUpdateButtonAction(
   state: DesktopUpdateState,
 ): DesktopUpdateButtonAction {
+  if (state.manual) {
+    return state.availableVersion && state.releaseUrl && state.status !== "checking"
+      ? "release"
+      : "none";
+  }
   if (
     state.downloadedVersion &&
     (state.status === "downloaded" ||
@@ -71,6 +76,9 @@ export function getArm64IntelBuildWarningDescription(state: DesktopUpdateState):
 }
 
 export function getDesktopUpdateButtonTooltip(state: DesktopUpdateState): string {
+  if (resolveDesktopUpdateButtonAction(state) === "release") {
+    return `SPY update available: ${state.availableVersion}. View release on GitHub.`;
+  }
   if (state.status === "available") {
     return `Update ${state.availableVersion ?? "available"} ready to download`;
   }

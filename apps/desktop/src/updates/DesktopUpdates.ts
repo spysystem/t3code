@@ -34,6 +34,7 @@ import * as IpcChannels from "../ipc/channels.ts";
 import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
 import { normalizeDesktopUpdateReleaseNotes } from "./releaseNotes.ts";
 import { resolveDefaultDesktopUpdateChannel } from "./updateChannels.ts";
+import { checkSpyRelease, isSpyDesktopVersion, isSpyUpdatePlatform } from "./spyRelease.ts";
 import {
   createInitialDesktopUpdateState,
   reduceDesktopUpdateStateOnCheckFailure,
@@ -283,6 +284,7 @@ export const make = Effect.gen(function* () {
   const environment = yield* DesktopEnvironment.DesktopEnvironment;
   const fileSystem = yield* FileSystem.FileSystem;
   const desktopSettings = yield* DesktopAppSettings.DesktopAppSettings;
+  const manualUpdates = isSpyDesktopVersion(environment.appVersion);
 
   const appUpdateYmlConfigRef = yield* Ref.make<Option.Option<AppUpdateYmlConfig>>(Option.none());
   const activeUpdateActionRef = yield* Ref.make<Option.Option<UpdateAction>>(Option.none());
@@ -350,6 +352,17 @@ export const make = Effect.gen(function* () {
   );
 
   const resolveDisabledReason = Effect.gen(function* () {
+    if (manualUpdates) {
+      return Option.fromNullishOr(
+        environment.isDevelopment || !environment.isPackaged
+          ? "SPY update checks are only available in packaged production builds."
+          : config.disableAutoUpdate
+            ? "Update checks are disabled by the T3CODE_DISABLE_AUTO_UPDATE setting."
+            : !isSpyUpdatePlatform(environment.platform, environment.runtimeInfo.appArch)
+              ? "SPY update checks currently support Windows and Linux x64 and Apple Silicon Mac builds."
+              : null,
+      );
+    }
     const hasFeedConfig = yield* hasUpdateFeedConfig;
     return Option.fromNullishOr(
       getAutoUpdateDisabledReason({
@@ -430,6 +443,28 @@ export const make = Effect.gen(function* () {
       yield* setState(reduceDesktopUpdateStateOnCheckStart(state, checkedAt));
       yield* logUpdaterInfo("checking for updates", { reason });
 
+      if (manualUpdates) {
+        return yield* checkSpyRelease(environment.appVersion, environment.platform).pipe(
+          Effect.flatMap((release) =>
+            updateState((current) => {
+              const { releaseUrl: _previousUrl, ...base } = current;
+              return release
+                ? {
+                    ...reduceDesktopUpdateStateOnUpdateAvailable(base, release.version, checkedAt),
+                    releaseUrl: release.url,
+                  }
+                : reduceDesktopUpdateStateOnNoUpdate(base, checkedAt);
+            }),
+          ),
+          Effect.as(true),
+          Effect.catchTag("SpyReleaseCheckError", (error) =>
+            updateState((current) =>
+              reduceDesktopUpdateStateOnCheckFailure(current, error.message, checkedAt),
+            ).pipe(Effect.as(true)),
+          ),
+        );
+      }
+
       return yield* electronUpdater.checkForUpdates.pipe(
         Effect.as(true),
         Effect.catchTags({
@@ -459,6 +494,7 @@ export const make = Effect.gen(function* () {
   });
 
   const downloadAvailableUpdate = Effect.gen(function* () {
+    if (manualUpdates) return { accepted: false, completed: false };
     const state = yield* Ref.get(updateStateRef);
     if (!(yield* Ref.get(updaterConfiguredRef)) || state.status !== "available") {
       return { accepted: false, completed: false };
@@ -685,7 +721,7 @@ export const make = Effect.gen(function* () {
   const installWithExpectedVersion = Effect.fn("desktop.updates.install")(function* (
     expectedVersion?: string,
   ) {
-    if (yield* Ref.get(desktopState.quitting)) {
+    if (manualUpdates || (yield* Ref.get(desktopState.quitting))) {
       return {
         accepted: false,
         completed: false,
@@ -717,7 +753,7 @@ export const make = Effect.gen(function* () {
       }),
       Effect.forkScoped,
     );
-    yield* Effect.sleep(AUTO_UPDATE_POLL_INTERVAL).pipe(
+    yield* Effect.sleep(manualUpdates ? "4 hours" : AUTO_UPDATE_POLL_INTERVAL).pipe(
       Effect.andThen(checkForUpdates("poll")),
       Effect.forever,
       Effect.catchCause((cause) => {
@@ -907,6 +943,18 @@ export const make = Effect.gen(function* () {
     emitState,
     disabledReason: resolveDisabledReason,
     configure: Effect.gen(function* () {
+      if (manualUpdates) {
+        const disabledReason = yield* resolveDisabledReason;
+        const enabled = Option.isNone(disabledReason);
+        yield* setState({
+          ...createBaseUpdateState("latest", enabled, environment),
+          manual: true,
+          message: Option.getOrNull(disabledReason),
+        });
+        yield* Ref.set(updaterConfiguredRef, enabled);
+        if (enabled) yield* startUpdatePollers;
+        return;
+      }
       const context = yield* Effect.context<never>();
       const runEffect = (effect: Effect.Effect<void>) => {
         void Effect.runPromiseWith(context)(effect);
@@ -971,6 +1019,7 @@ export const make = Effect.gen(function* () {
     setChannel: Effect.fn("desktop.updates.setChannel")(function* (
       nextChannel: DesktopUpdateChannel,
     ) {
+      if (manualUpdates) return yield* Ref.get(updateStateRef);
       yield* Effect.annotateCurrentSpan({ channel: nextChannel });
       const activeAction = yield* tryStartChannelChange;
       if (Option.isSome(activeAction)) {
