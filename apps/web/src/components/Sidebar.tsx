@@ -24,6 +24,7 @@ import {
 } from "@t3tools/client-runtime/state/thread-settled";
 import { resolveSettledThreadTimestamp } from "@t3tools/client-runtime/state/thread-sort";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
+import { connectionStatusTitle } from "@t3tools/client-runtime/connection";
 import {
   parseScopedThreadKey,
   scopeProjectRef,
@@ -235,6 +236,8 @@ import {
 import { SidebarContent, SidebarGroup, useSidebar } from "./ui/sidebar";
 import { SidebarChromeFooter, SidebarChromeHeader } from "./sidebar/SidebarChrome";
 import { SidebarHeaderIconButton, SidebarThreadHeader } from "./sidebar/SidebarThreadHeader";
+import { SidebarEnvironmentFilter } from "./sidebar/SidebarEnvironmentFilter";
+import { resolveSidebarScope } from "./Sidebar.scope";
 import { Popover, PopoverPopup, PopoverTrigger } from "./ui/popover";
 import { Tooltip, TooltipPopup, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 import {
@@ -2354,17 +2357,36 @@ export default function Sidebar() {
   // app restarts keep it.
   const projectScopeKey = useUiStateStore((store) => store.sidebarProjectScopeKey);
   const setProjectScopeKey = useUiStateStore((store) => store.setSidebarProjectScopeKey);
+  const environmentScopeId = useUiStateStore((store) => store.sidebarEnvironmentScopeId);
+  const setEnvironmentScope = useUiStateStore((store) => store.setSidebarEnvironmentScope);
+  const selectedEnvironment =
+    environments.find((environment) => environment.environmentId === environmentScopeId) ?? null;
+  const showEnvironmentFilter =
+    environments.length > 1 || (environmentScopeId !== null && selectedEnvironment === null);
+  const {
+    availableProjects: scopeProjectGroups,
+    selectedProject: scopedProjectGroup,
+    projectKeys: scopedProjectKeys,
+  } = useMemo(
+    () => resolveSidebarScope(projectGroups, projectScopeKey, environmentScopeId),
+    [environmentScopeId, projectGroups, projectScopeKey],
+  );
+  const handleEnvironmentScopeChange = (environmentId: string | null) => {
+    const nextScope = resolveSidebarScope(projectGroups, projectScopeKey, environmentId);
+    setEnvironmentScope(environmentId, nextScope.selectedProject?.projectKey ?? null);
+    dispatchProjectScopeMenu({ type: "query-changed", query: "" });
+  };
   // {value, label} items let Base UI drive the combobox selection contract
   // while the popup search filters the same collection.
   const projectScopeItems = useMemo(
     () => [
       { value: "all", label: "All projects" },
-      ...projectGroups.map((project) => ({
+      ...scopeProjectGroups.map((project) => ({
         value: project.projectKey,
         label: project.displayName,
       })),
     ],
-    [projectGroups],
+    [scopeProjectGroups],
   );
   // Same-named projects on two machines are only told apart by where they
   // live, so rows on another machine carry its icon once the catalog spans
@@ -2403,24 +2425,6 @@ export default function Sidebar() {
           projectScopeFilter.contains(item, query, (candidate) => candidate.label),
       }),
     [projectScopeFilter, projectScopeItems, projectScopeMenuState.query],
-  );
-  const scopedProjectGroup = useMemo(
-    () =>
-      projectScopeKey === null
-        ? null
-        : (projectGroups.find((project) => project.projectKey === projectScopeKey) ?? null),
-    [projectGroups, projectScopeKey],
-  );
-  const scopedProjectKeys = useMemo(
-    () =>
-      scopedProjectGroup === null
-        ? null
-        : new Set(
-            scopedProjectGroup.memberProjectRefs.map(
-              (projectRef) => `${projectRef.environmentId}:${projectRef.projectId}`,
-            ),
-          ),
-    [scopedProjectGroup],
   );
   // A persisted scope whose project is gone falls back to all projects, but
   // only after every catalog environment has a live project snapshot. Cached
@@ -2461,7 +2465,7 @@ export default function Sidebar() {
   // hidden now, and bulk actions must never count or touch invisible rows.
   useEffect(() => {
     clearSelection();
-  }, [clearSelection, projectScopeKey]);
+  }, [clearSelection, environmentScopeId, projectScopeKey]);
 
   const openProjectSettings = useCallback(
     (projectGroup: SidebarProjectSnapshot) => {
@@ -2477,6 +2481,7 @@ export default function Sidebar() {
   );
   // Anchor for the scope popup: the header search field, not its icon trigger.
   const headerSearchRef = useRef<HTMLDivElement | null>(null);
+  const environmentFilterPopupRef = useRef<HTMLDivElement | null>(null);
   // Safari can send a click after Ctrl+click opens settings. Ignore that one
   // selection, then clear the guard when the picker opens again.
   const suppressNextScopeChangeRef = useRef(false);
@@ -2669,7 +2674,7 @@ export default function Sidebar() {
   // filter context changes so a scope/search flip never inherits a deep
   // page state.
   const [settledVisibleCount, setSettledVisibleCount] = useState(SETTLED_TAIL_INITIAL_COUNT);
-  const settledResetKey = projectScopeKey ?? "all";
+  const settledResetKey = JSON.stringify([environmentScopeId, projectScopeKey]);
   const lastSettledResetKeyRef = useRef(settledResetKey);
   if (lastSettledResetKeyRef.current !== settledResetKey) {
     lastSettledResetKeyRef.current = settledResetKey;
@@ -4360,7 +4365,7 @@ export default function Sidebar() {
           <SidebarGroup className="relative z-[1] p-[var(--sidebar-content-inset)] pt-1">
             <SidebarThreadHeader
               searchFieldRef={headerSearchRef}
-              hasProjects={projectGroups.length > 0}
+              hasProjects={projectGroups.length > 0 || showEnvironmentFilter}
               projectScope={
                 <Combobox
                   items={projectScopeItems}
@@ -4369,7 +4374,18 @@ export default function Sidebar() {
                   itemToStringLabel={(item) => item.label}
                   isItemEqualToValue={(a, b) => a.value === b.value}
                   open={projectScopeMenuState.open}
-                  onOpenChange={(open) => {
+                  onOpenChange={(open, details) => {
+                    // The environment select is portaled outside this combobox.
+                    // Its options must receive the click before either popup unmounts.
+                    if (
+                      !open &&
+                      details.reason === "outside-press" &&
+                      details.event.target instanceof Node &&
+                      environmentFilterPopupRef.current?.contains(details.event.target)
+                    ) {
+                      details.cancel();
+                      return;
+                    }
                     if (open) suppressNextScopeChangeRef.current = false;
                     dispatchProjectScopeMenu({ type: "open-changed", open });
                   }}
@@ -4391,8 +4407,8 @@ export default function Sidebar() {
                       <SidebarHeaderIconButton
                         label={
                           scopedProjectGroup
-                            ? `Filter threads by project: ${scopedProjectGroup.displayName}`
-                            : "Filter threads by project"
+                            ? `Filter threads: ${scopedProjectGroup.displayName}`
+                            : "Filter threads"
                         }
                       />
                     }
@@ -4416,6 +4432,19 @@ export default function Sidebar() {
                     anchor={headerSearchRef}
                     className="max-w-[min(18rem,var(--available-width))] overflow-hidden"
                   >
+                    {showEnvironmentFilter ? (
+                      <>
+                        <SidebarEnvironmentFilter
+                          popupRef={environmentFilterPopupRef}
+                          environments={environments}
+                          environmentId={environmentScopeId}
+                          onChange={handleEnvironmentScopeChange}
+                        />
+                        <div className="px-2 pt-2 text-xs font-medium text-muted-foreground">
+                          Project
+                        </div>
+                      </>
+                    ) : null}
                     <ComboboxSearchInput
                       aria-label="Search projects"
                       placeholder="Search projects..."
@@ -4513,6 +4542,31 @@ export default function Sidebar() {
               activeSearchResultIndex={activeSearchResultIndex}
               onClearSearch={clearThreadSearch}
             />
+            {environmentScopeId !== null ? (
+              <div className="flex min-w-0 items-center gap-1 px-2 pt-1 text-xs text-sidebar-muted-foreground">
+                <Tooltip>
+                  <TooltipTrigger render={<span className="min-w-0 flex-1 truncate" />}>
+                    {selectedEnvironment?.label ?? "Unavailable environment"}
+                  </TooltipTrigger>
+                  <TooltipPopup>
+                    {selectedEnvironment?.label ?? "Unavailable environment"}
+                  </TooltipPopup>
+                </Tooltip>
+                {selectedEnvironment && selectedEnvironment.connection.phase !== "connected" ? (
+                  <span className="shrink-0">
+                    {connectionStatusTitle(selectedEnvironment.connection)}
+                  </span>
+                ) : null}
+                <Button
+                  size="icon-micro"
+                  variant="ghost"
+                  aria-label="Clear environment filter"
+                  onClick={() => handleEnvironmentScopeChange(null)}
+                >
+                  <XIcon className="size-3" />
+                </Button>
+              </div>
+            ) : null}
           </SidebarGroup>
         }
       >
