@@ -3218,6 +3218,9 @@ const countPayloadFiles = Effect.fn("desktopArtifact.countPayloadFiles")(functio
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const pendingDirectories = [root];
+  // SPY: native Windows builds add prepared bytecode, one file per server chunk; upstream's
+  // cross-built release skips it, so the budget leaves it out.
+  const preparedBytecode = path.join(root, "resources", "server-compile-cache");
   let count = 0;
 
   while (pendingDirectories.length > 0) {
@@ -3228,6 +3231,7 @@ const countPayloadFiles = Effect.fn("desktopArtifact.countPayloadFiles")(functio
       const entryPath = path.join(directory, entry);
       const stat = yield* fs.stat(entryPath);
       if (stat.type === "Directory") {
+        if (entryPath === preparedBytecode) continue;
         pendingDirectories.push(entryPath);
       } else if (stat.type === "File") {
         count += 1;
