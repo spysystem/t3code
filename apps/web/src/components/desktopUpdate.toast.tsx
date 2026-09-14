@@ -1,4 +1,8 @@
-import type { DesktopBridge, DesktopUpdateState } from "@t3tools/contracts";
+import type {
+  DesktopBridge,
+  DesktopUpdateState,
+  DesktopUpdateCheckResult,
+} from "@t3tools/contracts";
 import { ArrowRightIcon } from "lucide-react";
 
 import {
@@ -8,6 +12,23 @@ import {
 import { toastManager } from "./ui/toast";
 
 type DesktopUpdateShell = Pick<DesktopBridge, "openExternal">;
+
+/** Explicit checks get feedback; background checks only announce available releases. */
+export function showManualUpdateCheckResult(result: DesktopUpdateCheckResult): void {
+  if (!result.checked || result.state.status === "error") {
+    toastManager.add({
+      type: "error",
+      title: "Could not check for updates",
+      description: result.state.message ?? "Please try again later.",
+    });
+  } else if (result.state.status === "up-to-date") {
+    toastManager.add({
+      type: "success",
+      title: "You're up to date",
+      description: `T3 Code (SPY) ${result.state.currentVersion} is the newest available version.`,
+    });
+  }
+}
 
 export async function openDesktopUpdateReleaseNotes(
   shell: DesktopUpdateShell | undefined,
