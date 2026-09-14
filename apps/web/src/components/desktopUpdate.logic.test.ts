@@ -35,6 +35,27 @@ const baseState: DesktopUpdateState = {
 };
 
 describe("desktop update button state", () => {
+  it("opens a manual release even after a later check fails, without offering installation", () => {
+    const state = {
+      ...baseState,
+      manual: true,
+      status: "available" as const,
+      availableVersion: "0.0.41-spy.10",
+      releaseUrl: "https://github.com/spysystem/t3code/releases/tag/spy-v0.0.41-spy.10",
+    };
+    expect(resolveDesktopUpdateButtonAction(state)).toBe("release");
+    expect(getDesktopUpdateButtonTooltip(state)).toContain("View release on GitHub");
+    expect(resolveDesktopUpdateButtonAction({ ...state, status: "error" })).toBe("release");
+    expect(resolveDesktopUpdateButtonAction({ ...state, status: "checking" })).toBe("none");
+    expect(resolveDesktopUpdateButtonAction({ ...baseState, manual: true })).toBe("none");
+    const packageState = {
+      ...state,
+      updateInstructions: "Run sudo dnf upgrade --refresh t3code, then restart T3 Code.",
+    };
+    expect(getDesktopUpdateButtonTooltip(packageState)).toBe(
+      "SPY update available: 0.0.41-spy.10. Run sudo dnf upgrade --refresh t3code, then restart T3 Code.",
+    );
+  });
   it("shows a download action when an update is available", () => {
     const state: DesktopUpdateState = {
       ...baseState,
@@ -189,6 +210,12 @@ describe("desktop update UI helpers", () => {
   it("builds the nightly release URL without dropping its version suffix", () => {
     expect(getDesktopUpdateReleaseUrl("0.0.30-nightly.20260728.931")).toBe(
       "https://github.com/pingdotgg/t3code/releases/tag/v0.0.30-nightly.20260728.931",
+    );
+  });
+
+  it("builds the SPY fork's release URL for a SPY version", () => {
+    expect(getDesktopUpdateReleaseUrl("0.0.46-spy.7")).toBe(
+      "https://github.com/spysystem/t3code/releases/tag/spy-v0.0.46-spy.7",
     );
   });
 
