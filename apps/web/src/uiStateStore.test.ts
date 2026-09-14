@@ -12,6 +12,7 @@ import {
   reorderProjects,
   resolveProjectExpanded,
   setProjectExpanded,
+  setSidebarEnvironmentScope,
   type UiState,
 } from "./uiStateStore";
 
@@ -20,6 +21,7 @@ function makeUiState(overrides: Partial<UiState> = {}): UiState {
     projectExpandedById: {},
     projectOrder: [],
     sidebarProjectScopeKey: null,
+    sidebarEnvironmentScopeId: null,
     threadLastVisitedAtById: {},
     threadChangedFilesExpandedById: {},
     defaultAdvertisedEndpointKey: null,
@@ -92,6 +94,19 @@ describe("uiStateStore pure functions", () => {
 
     expect(next.projectOrder).toEqual([keyB, keyC, keyALocal, keyARemote]);
   });
+
+  it("changes environment and project scope together and preserves the project when clearing environment", () => {
+    const scoped = setSidebarEnvironmentScope(makeUiState(), "server", "shared-repo");
+    expect(setSidebarEnvironmentScope(scoped, "server", "shared-repo")).toBe(scoped);
+    expect(setSidebarEnvironmentScope(scoped, "laptop", null)).toMatchObject({
+      sidebarEnvironmentScopeId: "laptop",
+      sidebarProjectScopeKey: null,
+    });
+    expect(setSidebarEnvironmentScope(scoped, null, "shared-repo")).toMatchObject({
+      sidebarEnvironmentScopeId: null,
+      sidebarProjectScopeKey: "shared-repo",
+    });
+  });
 });
 
 describe("parsePersistedState", () => {
@@ -126,6 +141,7 @@ describe("parsePersistedState", () => {
       },
       defaultAdvertisedEndpointKey: "desktop-core:lan:http",
       sidebarProjectScopeKey: null,
+      sidebarEnvironmentScopeId: null,
       pullRequestMergeMethod: "merge",
       threadChangedFilesExpandedById: {
         "environment:thread-1": {
@@ -231,6 +247,7 @@ describe("uiStateStore persistence", () => {
       },
       defaultAdvertisedEndpointKey: "desktop-core:lan:http",
       sidebarProjectScopeKey: null,
+      sidebarEnvironmentScopeId: null,
       threadChangedFilesExpansionVersion: 2,
       threadChangedFilesExpandedById: {
         "environment:thread-1": {
@@ -255,5 +272,21 @@ describe("uiStateStore persistence", () => {
     expect(parsePersistedState(persisted).sidebarProjectScopeKey).toBe(
       "github.com/pingdotgg/t3code",
     );
+  });
+
+  it("restores both sidebar filters across reloads and defaults old state to all environments", () => {
+    const state = makeUiState({
+      sidebarEnvironmentScopeId: "server",
+      sidebarProjectScopeKey: "shared-repo",
+    });
+    persistState(state);
+    const persisted = JSON.parse(
+      localStorageStub.getItem(PERSISTED_STATE_KEY) ?? "{}",
+    ) as PersistedUiState;
+    expect(parsePersistedState(persisted)).toEqual(state);
+    expect(parsePersistedState({}).sidebarEnvironmentScopeId).toBeNull();
+    expect(
+      parsePersistedState({ sidebarEnvironmentScopeId: "" }).sidebarEnvironmentScopeId,
+    ).toBeNull();
   });
 });
