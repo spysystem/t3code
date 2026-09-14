@@ -1,3 +1,4 @@
+import { openDesktopUpdateReleaseNotes, showManualUpdateCheckResult } from "../desktopUpdate.toast";
 import { NotificationSettings } from "./NotificationSettings";
 import { PRIVACY_POLICY_URL } from "../../legalLinks";
 import { CheckIcon } from "lucide-react";
@@ -32,6 +33,7 @@ import {
   getDesktopUpdateDisabledReason,
   getDesktopUpdateInstallConfirmationMessage,
   isDesktopUpdateButtonDisabled,
+  isSpyDesktopVersion,
   resolveDesktopUpdateButtonAction,
 } from "../../components/desktopUpdate.logic";
 import { ProviderModelPicker } from "../chat/ProviderModelPicker";
@@ -185,6 +187,11 @@ function AboutVersionSection() {
 
     const action = updateState ? resolveDesktopUpdateButtonAction(updateState) : "none";
 
+    if (action === "release" && updateState?.releaseUrl) {
+      await openDesktopUpdateReleaseNotes(bridge, updateState.releaseUrl);
+      return;
+    }
+
     if (action === "download") {
       void bridge.downloadUpdate().catch((error: unknown) => {
         toastManager.add(
@@ -242,6 +249,10 @@ function AboutVersionSection() {
     void bridge
       .checkForUpdate()
       .then((result) => {
+        if (result.state.manual) {
+          showManualUpdateCheckResult(result);
+          return;
+        }
         if (!result.checked) {
           toastManager.add(
             stackedThreadToast({
@@ -271,7 +282,11 @@ function AboutVersionSection() {
       ? !canCheckForUpdate(updateState)
       : isDesktopUpdateButtonDisabled(updateState);
 
-  const actionLabel: Record<string, string> = { download: "Download", install: "Install" };
+  const actionLabel: Record<string, string> = {
+    download: "Download",
+    install: "Install",
+    release: "View release on GitHub",
+  };
   const statusLabel: Record<string, string> = {
     checking: "Checking…",
     downloading: "Downloading…",
@@ -279,8 +294,11 @@ function AboutVersionSection() {
   };
   const buttonLabel =
     actionLabel[action] ?? statusLabel[updateState?.status ?? ""] ?? "Check for Updates";
-  const description =
-    action === "download" || action === "install"
+  const description = updateState?.manual
+    ? action === "release"
+      ? `SPY update available: ${updateState.availableVersion}. ${updateState.updateInstructions ?? "Download and install it manually."}`
+      : "Checks GitHub for SPY releases. Installation is manual."
+    : action === "download" || action === "install"
       ? "Update available."
       : (getDesktopUpdateDisabledReason(updateState) ?? "Current version of the application.");
 
@@ -308,7 +326,7 @@ function AboutVersionSection() {
           </Tooltip>
         }
       />
-      {hasDesktopBridge ? (
+      {hasDesktopBridge && !(updateState && isSpyDesktopVersion(updateState.currentVersion)) ? (
         <SettingsRow
           {...searchableSetting("update-track")}
           description="Use stable releases or nightly builds. Switch back anytime."
