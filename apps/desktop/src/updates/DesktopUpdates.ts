@@ -38,6 +38,12 @@ import { normalizeDesktopUpdateReleaseNotes } from "./releaseNotes.ts";
 import { desktopUpdateChannelOf } from "@t3tools/shared/cliRelease";
 import { compareSemverVersions } from "@t3tools/shared/semver";
 import {
+  checkSpyRelease,
+  isSpyDesktopVersion,
+  isSpyUpdatePlatform,
+  spyPackageUpdateInstructions,
+} from "./spyRelease.ts";
+import {
   createInitialDesktopUpdateState,
   reduceDesktopUpdateStateOnCheckFailure,
   reduceDesktopUpdateStateOnCheckStart,
@@ -352,6 +358,10 @@ export const make = Effect.gen(function* () {
   const environment = yield* DesktopEnvironment.DesktopEnvironment;
   const fileSystem = yield* FileSystem.FileSystem;
   const desktopSettings = yield* DesktopAppSettings.DesktopAppSettings;
+  // Windows installs SPY releases with electron-updater from the fork's GitHub releases, on
+  // either track; Linux and Mac only check for Stable ones (spyRelease.ts).
+  const spyRelease = isSpyDesktopVersion(environment.appVersion);
+  const manualUpdates = spyRelease && environment.platform !== "win32";
 
   const appUpdateYmlConfigRef = yield* Ref.make<Option.Option<AppUpdateYmlConfig>>(Option.none());
   const activeUpdateActionRef = yield* Ref.make<Option.Option<UpdateAction>>(Option.none());
@@ -373,7 +383,9 @@ export const make = Effect.gen(function* () {
           desktopUpdateChannelOf(version) === state.channel &&
           (Option.isSome(floor)
             ? compareSemverVersions(version, floor.value) >= 0
-            : desktopUpdateChannelOf(environment.appVersion) === state.channel),
+            : // SPY never downgrades, and its Nightly versions sort below the Stable promoted
+              // from them, so any newer build on either track knows this one's migrations.
+              spyRelease || desktopUpdateChannelOf(environment.appVersion) === state.channel),
       ),
     );
   const updateStateRef = yield* Ref.make<DesktopUpdateState>(
@@ -420,21 +432,34 @@ export const make = Effect.gen(function* () {
   );
 
   // electron-updater uses this marker to install .deb updates with dpkg.
-  const isDebPackage =
+  // SPY's .deb and .rpm carry it too, and their update text names the package manager.
+  const linuxPackageType =
     environment.platform === "linux" && environment.isPackaged
       ? yield* fileSystem
           .readFileString(environment.path.join(environment.resourcesPath, "package-type"))
           .pipe(
-            Effect.map((packageType) => packageType.trim() === "deb"),
-            Effect.orElseSucceed(() => false),
+            Effect.map((packageType) => packageType.trim()),
+            Effect.orElseSucceed(() => null),
           )
-      : false;
+      : null;
+  const isDebPackage = linuxPackageType === "deb";
 
   const hasUpdateFeedConfig = Ref.get(appUpdateYmlConfigRef).pipe(
     Effect.map((appUpdateYmlConfig) => Option.isSome(appUpdateYmlConfig) || config.mockUpdates),
   );
 
   const resolveDisabledReason = Effect.gen(function* () {
+    if (manualUpdates) {
+      return Option.fromNullishOr(
+        environment.isDevelopment || !environment.isPackaged
+          ? "SPY update checks are only available in packaged production builds."
+          : config.disableAutoUpdate
+            ? "Update checks are disabled by the T3CODE_DISABLE_AUTO_UPDATE setting."
+            : !isSpyUpdatePlatform(environment.platform, environment.runtimeInfo.appArch)
+              ? "SPY update checks currently support Linux x64 and Apple Silicon Mac builds."
+              : null,
+      );
+    }
     const hasFeedConfig = yield* hasUpdateFeedConfig;
     return Option.fromNullishOr(
       getAutoUpdateDisabledReason({
@@ -515,6 +540,29 @@ export const make = Effect.gen(function* () {
       yield* setState(reduceDesktopUpdateStateOnCheckStart(state, checkedAt));
       yield* logUpdaterInfo("checking for updates", { reason });
 
+      if (manualUpdates) {
+        return yield* checkSpyRelease(environment.appVersion, environment.platform).pipe(
+          Effect.flatMap((release) =>
+            updateState((current) => {
+              const { releaseUrl: _previousUrl, ...base } = current;
+              return release
+                ? {
+                    ...reduceDesktopUpdateStateOnUpdateAvailable(base, release.version, checkedAt),
+                    releaseUrl: release.url,
+                  }
+                : reduceDesktopUpdateStateOnNoUpdate(base, checkedAt);
+            }),
+          ),
+          Effect.as(true),
+          Effect.catchTags({
+            SpyReleaseCheckError: (error) =>
+              updateState((current) =>
+                reduceDesktopUpdateStateOnCheckFailure(current, error.message, checkedAt),
+              ).pipe(Effect.as(true)),
+          }),
+        );
+      }
+
       // The flag is shared updater state, so it flips only while this check holds the reservation.
       const restoreDowngrade = yield* electronUpdater.allowDowngrade;
       if (allowDowngrade) yield* electronUpdater.setAllowDowngrade(true);
@@ -549,6 +597,7 @@ export const make = Effect.gen(function* () {
   });
 
   const downloadAvailableUpdate = Effect.gen(function* () {
+    if (manualUpdates) return { accepted: false, completed: false };
     const state = yield* Ref.get(updateStateRef);
     if (!(yield* Ref.get(updaterConfiguredRef)) || state.status !== "available") {
       return { accepted: false, completed: false };
@@ -822,7 +871,7 @@ export const make = Effect.gen(function* () {
   const installWithExpectedVersion = Effect.fn("desktop.updates.install")(function* (
     expectedVersion?: string,
   ) {
-    if (yield* Ref.get(desktopState.quitting)) {
+    if (manualUpdates || (yield* Ref.get(desktopState.quitting))) {
       return {
         accepted: false,
         completed: false,
@@ -855,7 +904,7 @@ export const make = Effect.gen(function* () {
       }),
       Effect.forkScoped,
     );
-    yield* Effect.sleep(AUTO_UPDATE_POLL_INTERVAL).pipe(
+    yield* Effect.sleep(manualUpdates ? "4 hours" : AUTO_UPDATE_POLL_INTERVAL).pipe(
       Effect.andThen(checkForUpdates("poll")),
       Effect.forever,
       Effect.catchCause((cause) => {
@@ -1066,6 +1115,19 @@ export const make = Effect.gen(function* () {
     emitState,
     disabledReason: resolveDisabledReason,
     configure: Effect.gen(function* () {
+      if (manualUpdates) {
+        const disabledReason = yield* resolveDisabledReason;
+        const enabled = Option.isNone(disabledReason);
+        const updateInstructions = spyPackageUpdateInstructions(linuxPackageType);
+        yield* setState({
+          ...createBaseUpdateState("latest", disabledReason, environment),
+          manual: true,
+          ...(updateInstructions ? { updateInstructions } : {}),
+        });
+        yield* Ref.set(updaterConfiguredRef, enabled);
+        if (enabled) yield* startUpdatePollers;
+        return;
+      }
       const context = yield* Effect.context<never>();
       const runEffect = (effect: Effect.Effect<void>) => {
         void Effect.runPromiseWith(context)(effect);
@@ -1091,8 +1153,9 @@ export const make = Effect.gen(function* () {
       }
 
       const settings = yield* desktopSettings.get;
+      const channel = manualUpdates ? "latest" : settings.updateChannel;
       const disabledReason = yield* resolveDisabledReason;
-      yield* setState(yield* baseUpdateState(settings.updateChannel, disabledReason));
+      yield* setState(yield* baseUpdateState(channel, disabledReason));
       if (Option.isSome(disabledReason)) {
         return;
       }
@@ -1100,7 +1163,7 @@ export const make = Effect.gen(function* () {
 
       yield* electronUpdater.setAutoDownload(false);
       yield* electronUpdater.setAutoInstallOnAppQuit(false);
-      yield* applyAutoUpdaterChannel(settings.updateChannel);
+      yield* applyAutoUpdaterChannel(channel);
       yield* electronUpdater.setDisableDifferentialDownload(
         isArm64HostRunningIntelBuild(environment.runtimeInfo),
       );
@@ -1140,6 +1203,7 @@ export const make = Effect.gen(function* () {
       nextChannel: DesktopUpdateChannel,
       options?: { readonly minimumVersion?: string | undefined },
     ) {
+      if (manualUpdates) return yield* Ref.get(updateStateRef);
       yield* Effect.annotateCurrentSpan({ channel: nextChannel });
       // A background check holds the updater only briefly, so wait it out instead of refusing.
       const activeAction = yield* tryStartChannelChange.pipe(
@@ -1190,7 +1254,7 @@ export const make = Effect.gen(function* () {
         yield* checkForUpdates(
           "channel-change",
           "held",
-          nextChannel !== desktopUpdateChannelOf(environment.appVersion),
+          !spyRelease && nextChannel !== desktopUpdateChannelOf(environment.appVersion),
         );
         return yield* Ref.get(updateStateRef);
       }).pipe(Effect.ensuring(finishUpdateAction("channel")));

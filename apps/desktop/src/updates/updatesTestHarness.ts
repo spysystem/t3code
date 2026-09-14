@@ -18,6 +18,8 @@ import * as DesktopUpdates from "./DesktopUpdates.ts";
 export const flushCallbacks = Effect.yieldNow;
 
 export interface UpdatesHarnessOptions {
+  readonly processArch?: string;
+  readonly isPackaged?: boolean;
   readonly checkForUpdates?: Effect.Effect<
     void,
     ElectronUpdater.ElectronUpdaterCheckForUpdatesError
@@ -173,10 +175,10 @@ export function makeHarness(options: UpdatesHarnessOptions = {}) {
     dirname: "/repo/apps/desktop/src",
     homeDirectory: `/tmp/t3-desktop-updates-home-${process.pid}`,
     platform: options.platform ?? "darwin",
-    processArch: "x64",
+    processArch: options.processArch ?? "x64",
     appVersion: options.appVersion ?? "1.2.3",
     appPath: "/repo",
-    isPackaged: true,
+    isPackaged: options.isPackaged ?? true,
     resourcesPath: "/missing/resources",
     runningUnderArm64Translation: false,
   }).pipe(
@@ -244,7 +246,8 @@ export function makeHarness(options: UpdatesHarnessOptions = {}) {
         ? (installRecords.get(path) ?? previousInstallRecord)
         : undefined;
       if (installRecord !== undefined) return Effect.succeed(installRecord);
-      return path === "/missing/resources/package-type" && options.packageType !== undefined
+      return path.replaceAll("\\", "/") === "/missing/resources/package-type" &&
+        options.packageType !== undefined
         ? Effect.succeed(options.packageType)
         : Effect.fail(
             PlatformError.systemError({

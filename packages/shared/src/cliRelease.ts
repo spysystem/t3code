@@ -69,7 +69,8 @@ export const CLI_RELEASE_CHANNELS: ReadonlyArray<CliReleaseChannel> = [
 ];
 
 export function cliReleaseChannelOf(version: string): CliReleaseChannel {
-  const channel = /^[^-+]+-(nightly|preview)\.\d{8}\.\d+$/.exec(version)?.[1];
+  // SPY fork nightlies append `.spy.N` to the upstream nightly they build on.
+  const channel = /^[^-+]+-(nightly|preview)\.\d{8}\.\d+(?:\.spy\.\d+)?$/.exec(version)?.[1];
   return channel === "nightly" || channel === "preview" ? channel : "stable";
 }
 
