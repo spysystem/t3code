@@ -1,9 +1,16 @@
 import type { DesktopUpdateActionResult, DesktopUpdateState } from "@t3tools/contracts";
 
-export type DesktopUpdateButtonAction = "download" | "install" | "none";
+export type DesktopUpdateButtonAction = "download" | "install" | "release" | "none";
 
 const DESKTOP_RELEASE_HISTORY_URL = "https://github.com/pingdotgg/t3code/releases";
 const DESKTOP_RELEASE_TAG_URL = `${DESKTOP_RELEASE_HISTORY_URL}/tag`;
+const SPY_DESKTOP_VERSION = /^\d+\.\d+\.\d+-spy\.\d+$/;
+const SPY_RELEASE_TAG_URL = "https://github.com/spysystem/t3code/releases/tag/spy-v";
+
+/** SPY fork builds (`X.Y.Z-spy.N`) have one update track and their own release tags. */
+export function isSpyDesktopVersion(version: string): boolean {
+  return SPY_DESKTOP_VERSION.test(version);
+}
 
 /**
  * The main process fills `downloadedVersion` from the updater's `update-downloaded`
@@ -18,6 +25,7 @@ export function getDesktopUpdateDownloadedVersion(state: DesktopUpdateState): st
 export function getDesktopUpdateReleaseUrl(version: string | null): string | null {
   const normalizedVersion = version?.trim();
   if (!normalizedVersion) return null;
+  if (isSpyDesktopVersion(normalizedVersion)) return `${SPY_RELEASE_TAG_URL}${normalizedVersion}`;
   return `${DESKTOP_RELEASE_TAG_URL}/v${encodeURIComponent(normalizedVersion)}`;
 }
 
@@ -28,6 +36,11 @@ export function getDesktopUpdateReleaseHistoryUrl(): string {
 export function resolveDesktopUpdateButtonAction(
   state: DesktopUpdateState,
 ): DesktopUpdateButtonAction {
+  if (state.manual) {
+    return state.availableVersion && state.releaseUrl && state.status !== "checking"
+      ? "release"
+      : "none";
+  }
   if (
     state.downloadedVersion &&
     (state.status === "downloaded" ||
@@ -71,6 +84,9 @@ export function getArm64IntelBuildWarningDescription(state: DesktopUpdateState):
 }
 
 export function getDesktopUpdateButtonTooltip(state: DesktopUpdateState): string {
+  if (resolveDesktopUpdateButtonAction(state) === "release") {
+    return `SPY update available: ${state.availableVersion}. ${state.updateInstructions ?? "View release on GitHub."}`;
+  }
   if (state.status === "available") {
     return `Update ${state.availableVersion ?? "available"} ready to download`;
   }
