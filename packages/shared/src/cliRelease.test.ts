@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { cliArchiveTarCommand, newestCliReleaseVersion, parseChecksums } from "./cliRelease.ts";
+import {
+  cliArchiveTarCommand,
+  desktopUpdateChannelOf,
+  newestCliReleaseVersion,
+  parseChecksums,
+} from "./cliRelease.ts";
 
 describe("cliRelease", () => {
   it("parses sha256sum output including binary-mode markers", () => {
@@ -23,6 +28,16 @@ describe("cliRelease", () => {
       "D:\\Win\\System32\\tar.exe",
     );
     expect(cliArchiveTarCommand("win32", {})).toBe("C:\\Windows\\System32\\tar.exe");
+  });
+
+  it.each([
+    ["1.2.3", "latest"],
+    ["1.2.3-spy.4", "latest"],
+    ["1.2.4-nightly.20260912.7", "nightly"],
+    ["1.2.4-nightly.20260912.7.spy.2", "nightly"],
+    ["1.2.4-preview.20260912.8", "latest"],
+  ])("puts desktop build %s on the %s track", (version, channel) => {
+    expect(desktopUpdateChannelOf(version)).toBe(channel);
   });
 
   it("picks the newest non-draft release on the requested channel", () => {
