@@ -120,6 +120,15 @@ The linked pull request participates in automatic settlement.
 
 ## Find and reference work
 
+On web and desktop, use the sidebar's thread filter to select an **Environment**,
+a **Project**, or both. Selecting an environment narrows the project choices and
+all thread sections, including drafts and sidebar search results. Switching to
+an environment without the selected project clears the project filter.
+
+The filters are remembered on this device. Choose **All environments** or clear
+the environment label below search to show threads across environments again.
+An offline environment stays selected and shows its connection status.
+
 On web and desktop, open the command palette with `Cmd/Ctrl+K` to search threads
 across connected environments. Message search starts after two characters and
 includes your messages and final agent responses.
