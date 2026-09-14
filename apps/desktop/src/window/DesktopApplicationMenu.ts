@@ -10,8 +10,10 @@ import { makeComponentLogger } from "../app/DesktopObservability.ts";
 import * as ElectronApp from "../electron/ElectronApp.ts";
 import * as ElectronDialog from "../electron/ElectronDialog.ts";
 import * as ElectronMenu from "../electron/ElectronMenu.ts";
+import * as ElectronShell from "../electron/ElectronShell.ts";
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
 import * as DesktopUpdates from "../updates/DesktopUpdates.ts";
+import { spyUpdateInstructions } from "../updates/spyRelease.ts";
 import * as DesktopWindow from "./DesktopWindow.ts";
 
 export class DesktopApplicationMenuActionError extends Schema.TaggedError<DesktopApplicationMenuActionError>()(
@@ -34,8 +36,10 @@ export class DesktopApplicationMenu extends Context.Service<
 >()("@t3tools/desktop/window/DesktopApplicationMenu") {}
 
 type DesktopApplicationMenuRuntimeServices =
+  | DesktopEnvironment.DesktopEnvironment
   | DesktopUpdates.DesktopUpdates
   | DesktopWindow.DesktopWindow
+  | ElectronShell.ElectronShell
   | ElectronDialog.ElectronDialog;
 
 const { logInfo: logUpdaterInfo } = makeComponentLogger("desktop-updater");
@@ -64,7 +68,29 @@ const checkForUpdatesFromMenu = Effect.gen(function* () {
   const result = yield* updates.check("menu");
   const updateState = result.state;
 
-  if (updateState.status === "up-to-date") {
+  if (updateState.manual && updateState.status === "available" && updateState.releaseUrl) {
+    const environment = yield* DesktopEnvironment.DesktopEnvironment;
+    const result = yield* electronDialog.showMessageBox({
+      type: "info",
+      title: "SPY update available",
+      message: `SPY update available: ${updateState.availableVersion}`,
+      detail: spyUpdateInstructions(environment.platform),
+      buttons: ["View release on GitHub", "Later"],
+      cancelId: 1,
+    });
+    if (result.response === 0) {
+      const shell = yield* ElectronShell.ElectronShell;
+      if (!(yield* shell.openExternal(updateState.releaseUrl))) {
+        yield* electronDialog.showMessageBox({
+          type: "warning",
+          title: "Could not open GitHub",
+          message: "Open this release in your browser to download the installer.",
+          detail: updateState.releaseUrl,
+          buttons: ["OK"],
+        });
+      }
+    }
+  } else if (updateState.status === "up-to-date") {
     yield* electronDialog.showMessageBox({
       type: "info",
       title: "You're up to date!",
