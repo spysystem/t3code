@@ -1,6 +1,6 @@
 import type { DesktopUpdateActionResult, DesktopUpdateState } from "@t3tools/contracts";
 
-export type DesktopUpdateButtonAction = "download" | "install" | "none";
+export type DesktopUpdateButtonAction = "download" | "install" | "release" | "none";
 
 const DEFAULT_DESKTOP_RELEASE_REPOSITORY = "pingdotgg/t3code";
 const GITHUB_REPOSITORY_SEGMENT = /^[A-Za-z0-9._-]+$/u;
@@ -21,6 +21,14 @@ function desktopReleaseRepositoryUrl(repository: string | undefined): string {
   return `https://github.com/${releaseRepository}/releases`;
 }
 
+const SPY_DESKTOP_VERSION = /^\d+\.\d+\.\d+-spy\.\d+$/;
+const SPY_RELEASE_TAG_URL = "https://github.com/spysystem/t3code/releases/tag/spy-v";
+
+/** SPY fork builds (`X.Y.Z-spy.N`) have one update track and their own release tags. */
+export function isSpyDesktopVersion(version: string): boolean {
+  return SPY_DESKTOP_VERSION.test(version);
+}
+
 /**
  * The main process fills `downloadedVersion` from the updater's `update-downloaded`
  * event, which is dispatched on its own fiber. A download RPC can therefore resolve
@@ -36,6 +44,7 @@ export function getDesktopUpdateReleaseUrl(
 ): string | null {
   const normalizedVersion = version?.trim();
   if (!normalizedVersion) return null;
+  if (isSpyDesktopVersion(normalizedVersion)) return `${SPY_RELEASE_TAG_URL}${normalizedVersion}`;
   return `${desktopReleaseRepositoryUrl(repository)}/tag/v${encodeURIComponent(normalizedVersion)}`;
 }
 
@@ -48,6 +57,11 @@ export function getDesktopUpdateReleaseHistoryUrl(
 export function resolveDesktopUpdateButtonAction(
   state: DesktopUpdateState,
 ): DesktopUpdateButtonAction {
+  if (state.manual) {
+    return state.availableVersion && state.releaseUrl && state.status !== "checking"
+      ? "release"
+      : "none";
+  }
   if (
     state.downloadedVersion &&
     (state.status === "downloaded" ||
@@ -91,6 +105,9 @@ export function getArm64IntelBuildWarningDescription(state: DesktopUpdateState):
 }
 
 export function getDesktopUpdateButtonTooltip(state: DesktopUpdateState): string {
+  if (resolveDesktopUpdateButtonAction(state) === "release") {
+    return `SPY update available: ${state.availableVersion}. ${state.updateInstructions ?? "View release on GitHub."}`;
+  }
   if (
     state.notAppliedVersion !== undefined &&
     (state.status === "available" || state.status === "downloaded") &&
