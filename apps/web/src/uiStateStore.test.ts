@@ -12,6 +12,7 @@ import {
   reorderProjects,
   resolveProjectExpanded,
   setProjectExpanded,
+  setSidebarEnvironmentScope,
   type UiState,
 } from "./uiStateStore";
 
@@ -20,6 +21,7 @@ function makeUiState(overrides: Partial<UiState> = {}): UiState {
     projectExpandedById: {},
     projectOrder: [],
     sidebarProjectScopeKeys: [],
+    sidebarEnvironmentScopeId: null,
     threadLastVisitedAtById: {},
     defaultAdvertisedEndpointKey: null,
     pullRequestMergeMethod: "merge",
@@ -91,6 +93,19 @@ describe("uiStateStore pure functions", () => {
 
     expect(next.projectOrder).toEqual([keyB, keyC, keyALocal, keyARemote]);
   });
+
+  it("changes environment and project scope together and preserves the projects when clearing environment", () => {
+    const scoped = setSidebarEnvironmentScope(makeUiState(), "server", ["shared-repo", "other"]);
+    expect(setSidebarEnvironmentScope(scoped, "server", ["shared-repo", "other"])).toBe(scoped);
+    expect(setSidebarEnvironmentScope(scoped, "laptop", [])).toMatchObject({
+      sidebarEnvironmentScopeId: "laptop",
+      sidebarProjectScopeKeys: [],
+    });
+    expect(setSidebarEnvironmentScope(scoped, null, ["shared-repo"])).toMatchObject({
+      sidebarEnvironmentScopeId: null,
+      sidebarProjectScopeKeys: ["shared-repo"],
+    });
+  });
 });
 
 describe("parsePersistedState", () => {
@@ -118,6 +133,7 @@ describe("parsePersistedState", () => {
       },
       defaultAdvertisedEndpointKey: "desktop-core:lan:http",
       sidebarProjectScopeKeys: [],
+      sidebarEnvironmentScopeId: null,
       pullRequestMergeMethod: "merge",
     });
   });
@@ -205,6 +221,7 @@ describe("uiStateStore persistence", () => {
       defaultAdvertisedEndpointKey: "desktop-core:lan:http",
       sidebarProjectScopeKeys: [],
       sidebarProjectScopeKey: null,
+      sidebarEnvironmentScopeId: null,
       pullRequestMergeMethod: "merge",
     });
     expect(parsePersistedState(persisted)).toEqual({
@@ -253,5 +270,21 @@ describe("uiStateStore persistence", () => {
       parsePersistedState({ sidebarProjectScopeKey: "github.com/pingdotgg/t3code" })
         .sidebarProjectScopeKeys,
     ).toEqual(["github.com/pingdotgg/t3code"]);
+  });
+
+  it("restores both sidebar filters across reloads and defaults old state to all environments", () => {
+    const state = makeUiState({
+      sidebarEnvironmentScopeId: "server",
+      sidebarProjectScopeKeys: ["shared-repo", "other-repo"],
+    });
+    persistState(state);
+    const persisted = JSON.parse(
+      localStorageStub.getItem(PERSISTED_STATE_KEY) ?? "{}",
+    ) as PersistedUiState;
+    expect(parsePersistedState(persisted)).toEqual(state);
+    expect(parsePersistedState({}).sidebarEnvironmentScopeId).toBeNull();
+    expect(
+      parsePersistedState({ sidebarEnvironmentScopeId: "" }).sidebarEnvironmentScopeId,
+    ).toBeNull();
   });
 });
