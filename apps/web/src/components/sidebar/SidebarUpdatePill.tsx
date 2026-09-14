@@ -31,7 +31,11 @@ import {
   shouldShowArm64IntelBuildWarning,
   shouldToastDesktopUpdateActionResult,
 } from "../desktopUpdate.logic";
-import { showDesktopUpdateDownloadedToast } from "../desktopUpdate.toast";
+import {
+  openDesktopUpdateReleaseNotes,
+  showDesktopUpdateDownloadedToast,
+  showManualUpdateCheckResult,
+} from "../desktopUpdate.toast";
 import { Alert, AlertDescription, AlertTitle } from "../ui/alert";
 import { Popover, PopoverCreateHandle, PopoverPopup, PopoverTrigger } from "../ui/popover";
 import { SidebarMenuItem } from "../ui/sidebar";
@@ -110,7 +114,7 @@ function resolveSidebarUpdatePresentation({
           ? "everything"
           : action === "install"
             ? "downloaded"
-            : action === "download"
+            : action === "download" || action === "release"
               ? "available"
               : "idle";
 
@@ -271,9 +275,11 @@ function SidebarUpdateControl() {
 
   const action = state ? resolveDesktopUpdateButtonAction(state) : "none";
   const isDownloading = state?.status === "downloading";
+  // Manual SPY releases install outside the app, so only in-app updates join the run.
+  const installsLocally = action === "download" || action === "install";
   // Remote servers follow this app to the version it is about to install.
   const localUpdateVersion =
-    state && action !== "none" ? getDesktopUpdateDownloadedVersion(state) : null;
+    state && installsLocally ? getDesktopUpdateDownloadedVersion(state) : null;
   const everything = useUpdateEverything(localUpdateVersion);
   const runsEverything = everything.hasUpdates && !isDownloading;
   // Providers leave the list once queued, so the run keeps its own state.
@@ -340,6 +346,12 @@ function SidebarUpdateControl() {
     if (!bridge || !state) return;
     setIsActionPending(true);
 
+    if (action === "release" && state.releaseUrl) {
+      await openDesktopUpdateReleaseNotes(bridge, state.releaseUrl);
+      setIsActionPending(false);
+      return;
+    }
+
     if (action === "download") {
       void downloadLocalUpdate(bridge, { notifyDownloaded: true }).finally(() =>
         setIsActionPending(false),
@@ -379,6 +391,10 @@ function SidebarUpdateControl() {
     void bridge
       .checkForUpdate()
       .then((result) => {
+        if (result.state.manual) {
+          showManualUpdateCheckResult(result);
+          return;
+        }
         if (result.checked) return;
         toastManager.add(
           stackedThreadToast({
@@ -413,7 +429,7 @@ function SidebarUpdateControl() {
                 downloadLocalUpdate(bridge, { notifyDownloaded: false, reportError }),
             }
           : {}),
-        ...(bridge && action !== "none"
+        ...(bridge && installsLocally
           ? { installLocal: (reportError) => installLocalUpdate(bridge, reportError) }
           : {}),
       });
@@ -428,7 +444,7 @@ function SidebarUpdateControl() {
     } finally {
       setIsActionPending(false);
     }
-  }, [action, everything]);
+  }, [action, everything, installsLocally]);
 
   const handleCheckAnimationIteration = useCallback(() => {
     setIsCheckAnimationLatched(

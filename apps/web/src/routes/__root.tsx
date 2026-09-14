@@ -33,6 +33,7 @@ import { ProviderUpdateLaunchNotification } from "../components/ProviderUpdateLa
 import { DesktopUpdateLaunchNotice } from "../components/sidebar/updateEverythingRun";
 import { NightlyMobileBetaNotice } from "../components/NightlyMobileBeta";
 import { LegacyThreadMigrationToast } from "../components/LegacyThreadMigrationToast";
+import { SpyUpdateNotification } from "../components/SpyUpdateNotification";
 import { ThreadNotificationCoordinator } from "../components/ThreadNotificationCoordinator";
 import { ReopenClosedViewShortcut } from "../components/ReopenClosedViewShortcut";
 import { ProjectCloneToastCoordinator } from "../components/ProjectCloneToastCoordinator";
@@ -269,6 +270,7 @@ function RootRouteView() {
           {isElectron ? <DesktopUpdateLaunchNotice /> : null}
           {/* Hosted Nightly is "hosted-static", not authenticated, and needs it too. */}
           <NightlyMobileBetaNotice />
+          <SpyUpdateNotification />
           {appShell}
           {/* Above the router: a theme draft is judged by walking the app, so the
               editor has to survive navigation away from settings. */}
