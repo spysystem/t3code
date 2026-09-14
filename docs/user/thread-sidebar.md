@@ -67,6 +67,7 @@ The server automatically links open PRs matching an unsettled thread's branch. O
 
 ## Find and reference work
 
+- **Filter by environment and project** (web/desktop): Use the sidebar's thread filter to select an **Environment**, one or more projects, or both. An environment narrows the project choices and every thread section, including drafts and sidebar search results, and drops selected projects it does not have. The filters are remembered on this device; choose **All environments** or clear the environment label below search to show every environment again. An offline environment stays selected and shows its connection status.
 - **Command palette** (`Cmd/Ctrl+K`): Searches threads across connected environments by title, branch, PR, project, and message contents (use `"exact phrase"` for exact matches). On mobile, use the thread list search (or `Cmd+K` on iPad with a keyboard).
 - **Copy reference**: Copies the linked PR URL if one exists, otherwise a thread link that pastes into any composer as a thread chip. Use **Copy → Thread** (or **Copy thread** on mobile) to force a thread link, or **Thread ID** for scripts and the `t3` CLI.
 
