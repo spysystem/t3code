@@ -274,6 +274,8 @@ export interface DesktopRuntimeInfo {
 
 export interface DesktopUpdateState {
   enabled: boolean;
+  manual?: boolean;
+  releaseUrl?: string;
   status: DesktopUpdateStatus;
   channel: DesktopUpdateChannel;
   currentVersion: string;
@@ -305,6 +307,8 @@ export const DesktopUpdateReleaseNoteSchema = Schema.Struct({
 
 export const DesktopUpdateStateSchema = Schema.Struct({
   enabled: Schema.Boolean,
+  manual: Schema.optionalKey(Schema.Boolean),
+  releaseUrl: Schema.optionalKey(Schema.String),
   status: DesktopUpdateStatusSchema,
   channel: DesktopUpdateChannelSchema,
   currentVersion: Schema.String,
