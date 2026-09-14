@@ -1,6 +1,7 @@
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import { m as resolveMessage } from "~/i18n/messages";
 import { useAtomValue } from "@effect/atom-react";
+import { openDesktopUpdateReleaseNotes, showManualUpdateCheckResult } from "../desktopUpdate.toast";
 import { NotificationSettings } from "./NotificationSettings";
 import { PRIVACY_POLICY_URL } from "../../legalLinks";
 import { CheckIcon } from "lucide-react";
@@ -48,6 +49,7 @@ import {
   getDesktopUpdateInstallConfirmationMessage,
   installDesktopUpdate,
   isDesktopUpdateButtonDisabled,
+  isSpyDesktopVersion,
   resolveDesktopUpdateButtonAction,
 } from "../../components/desktopUpdate.logic";
 import { ProviderModelPicker } from "../chat/ProviderModelPicker";
@@ -124,6 +126,7 @@ import { BackgroundActivitySettingsRow } from "./BackgroundActivitySettings";
 import { AdvancedSettings } from "./AdvancedSettings";
 import { PullRequestLinksOpenInAppSetting } from "./IntegrationsSettings";
 import { StorageCleanupSections } from "./StorageSettings";
+import { SpyUpdateTrackSetting } from "./SpyUpdateTrackSetting";
 import { UpdateTrackSwitchDialog } from "./UpdateTrackSwitchDialog";
 import { environmentIdsKey } from "~/state/environmentAtomList";
 import { environmentSessionStatesAtom } from "~/state/session";
@@ -223,6 +226,11 @@ function AboutVersionSection() {
 
     const action = updateState ? resolveDesktopUpdateButtonAction(updateState) : "none";
 
+    if (action === "release" && updateState?.releaseUrl) {
+      await openDesktopUpdateReleaseNotes(bridge, updateState.releaseUrl);
+      return;
+    }
+
     if (action === "download") {
       void downloadLocalUpdate(bridge, { notifyDownloaded: false });
       return;
@@ -290,6 +298,10 @@ function AboutVersionSection() {
     void bridge
       .checkForUpdate()
       .then((result) => {
+        if (result.state.manual) {
+          showManualUpdateCheckResult(result);
+          return;
+        }
         if (!result.checked) {
           toastManager.add(
             stackedThreadToast({
@@ -324,7 +336,11 @@ function AboutVersionSection() {
       ? !canCheckForUpdate(updateState)
       : isDesktopUpdateButtonDisabled(updateState);
 
-  const actionLabel: Record<string, string> = { download: gt("Download"), install: gt("Install") };
+  const actionLabel: Record<string, string> = {
+    download: gt("Download"),
+    install: gt("Install"),
+    release: gt("View release on GitHub"),
+  };
   const statusLabel: Record<string, string> = {
     checking: gt("Checking…"),
     downloading: gt("Downloading…"),
@@ -333,8 +349,14 @@ function AboutVersionSection() {
   };
   const buttonLabel =
     actionLabel[action] ?? statusLabel[updateState?.status ?? ""] ?? gt("Check for Updates");
-  const description =
-    action === "download" || action === "install"
+  const description = updateState?.manual
+    ? action === "release"
+      ? gt("SPY update available: {version}. {instructions}", {
+          version: updateState.availableVersion ?? "",
+          instructions: updateState.updateInstructions ?? gt("Download and install it manually."),
+        })
+      : gt("Checks GitHub for SPY releases. Installation is manual.")
+    : action === "download" || action === "install"
       ? gt("Update available.")
       : (getDesktopUpdateDisabledReason(updateState, updatesDenial, messages) ??
         gt("Current version of the application."));
@@ -364,7 +386,7 @@ function AboutVersionSection() {
           </Tooltip>
         }
       />
-      {hasDesktopBridge ? (
+      {hasDesktopBridge && !(updateState && isSpyDesktopVersion(updateState.currentVersion)) ? (
         <SettingsRow
           {...setting("update-track")}
           description={
@@ -468,6 +490,8 @@ function AboutVersionSection() {
             </Select>
           }
         />
+      ) : updateState && !updateState.manual ? (
+        <SpyUpdateTrackSetting channel={selectedUpdateChannel} disabled={updateRun !== null} />
       ) : null}
       {hasDesktopBridge ? <CliCommandSettingsRow /> : null}
       {switchChannel === null ? null : (
