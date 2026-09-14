@@ -21,6 +21,20 @@ interrupted, and threads without saved provider resume state need a new message.
 If you previously enabled continuation for updates, enable this setting once
 to allow recovery without a connected client.
 
+## SPY desktop releases
+
+The SPY Windows x64 app checks for newer fork releases on startup and every four
+hours. Use **Check for updates** in the app menu or **Settings → About** to check
+manually. When an update is available, **View release on GitHub** opens its release
+page. Download the `.exe` under **Assets**, close T3 Code, and run the installer.
+The app does not download or install updates automatically.
+
+Dismissing an update notification hides it until a different version is available;
+the release remains accessible through Settings and the sidebar update button.
+Older SPY installations that report no configured update feed need one manual
+upgrade from [SPY releases](https://github.com/spysystem/t3code/releases) to gain
+these checks. Update checks refer to the desktop app on the machine you are using.
+
 ## Update a connected server
 
 The offered action depends on how the server runs:
