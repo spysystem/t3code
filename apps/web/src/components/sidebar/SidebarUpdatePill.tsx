@@ -19,7 +19,11 @@ import {
   shouldShowArm64IntelBuildWarning,
   shouldToastDesktopUpdateActionResult,
 } from "../desktopUpdate.logic";
-import { showDesktopUpdateDownloadedToast } from "../desktopUpdate.toast";
+import {
+  openDesktopUpdateReleaseNotes,
+  showDesktopUpdateDownloadedToast,
+  showManualUpdateCheckResult,
+} from "../desktopUpdate.toast";
 import { Alert, AlertDescription, AlertTitle } from "../ui/alert";
 import { Popover, PopoverCreateHandle, PopoverPopup, PopoverTrigger } from "../ui/popover";
 import { SidebarMenuItem } from "../ui/sidebar";
@@ -77,7 +81,7 @@ function resolveSidebarUpdatePresentation({
       ? "downloaded"
       : isDownloading
         ? "downloading"
-        : action === "download"
+        : action === "download" || action === "release"
           ? "available"
           : "idle";
 
@@ -180,6 +184,12 @@ function SidebarUpdateControl() {
 
     setIsActionPending(true);
 
+    if (action === "release" && state.releaseUrl) {
+      await openDesktopUpdateReleaseNotes(bridge, state.releaseUrl);
+      setIsActionPending(false);
+      return;
+    }
+
     if (action === "download") {
       void bridge
         .downloadUpdate()
@@ -266,6 +276,10 @@ function SidebarUpdateControl() {
     void bridge
       .checkForUpdate()
       .then((result) => {
+        if (result.state.manual) {
+          showManualUpdateCheckResult(result);
+          return;
+        }
         if (result.checked) return;
         toastManager.add(
           stackedThreadToast({
