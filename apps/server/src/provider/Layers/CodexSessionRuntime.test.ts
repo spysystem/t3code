@@ -889,6 +889,60 @@ describe("isRecoverableThreadResumeError", () => {
 });
 
 describe("openCodexThread", () => {
+  for (const resumeThreadId of [undefined, "saved-thread"]) {
+    for (const availability of [
+      { browser: true, device: false },
+      { browser: false, device: true },
+      { browser: false, device: false },
+    ]) {
+      it.effect(
+        `delivers tool guidance separately when ${resumeThreadId ? "resuming" : "starting"} with ${JSON.stringify(availability)}`,
+        () =>
+          Effect.gen(function* () {
+            let instructions: string | null | undefined;
+            const response = makeThreadOpenResponse(resumeThreadId ?? "fresh-thread");
+            yield* openCodexThread({
+              client: {
+                request: (_method, payload) => {
+                  instructions = payload.developerInstructions;
+                  return Effect.succeed(response);
+                },
+                raw: {
+                  request: (_method, payload) => {
+                    instructions = payload.developerInstructions;
+                    return Effect.succeed(response);
+                  },
+                },
+              },
+              threadId: ThreadId.make("thread-1"),
+              runtimeMode: "full-access",
+              cwd: "/tmp/project",
+              requestedModel: "gpt-5.3-codex",
+              serviceTier: undefined,
+              resumeThreadId,
+              browserToolsAvailable: availability,
+            });
+
+            NodeAssert.equal(typeof instructions, "string");
+            NodeAssert.equal(instructions?.includes("preview_open"), availability.browser);
+            NodeAssert.equal(instructions?.includes("device_open"), availability.device);
+            NodeAssert.doesNotMatch(instructions ?? "", /<collaboration_mode>/);
+            if (availability.browser) {
+              NodeAssert.match(instructions ?? "", /Chrome DevTools MCP/);
+              NodeAssert.match(instructions ?? "", /separate browser connections/);
+            }
+            if (!availability.browser && !availability.device) {
+              NodeAssert.equal(
+                instructions,
+                "",
+                "Clear stale tool guidance when resuming without tools",
+              );
+            }
+          }),
+      );
+    }
+  }
+
   it.effect("resumes metadata when historical turns contain unknown error values", () =>
     Effect.gen(function* () {
       const response = makeThreadOpenResponse("saved-thread");
@@ -944,6 +998,7 @@ describe("openCodexThread", () => {
             sandbox: "workspace-write",
             approvalsReviewer: "auto_review",
             excludeTurns: true,
+            developerInstructions: "",
           },
         },
       ]);
