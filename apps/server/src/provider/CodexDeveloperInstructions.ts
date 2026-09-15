@@ -9,7 +9,11 @@ You are running inside T3 Code. The \`t3-code\` MCP server is the product-native
 
 For browser work, first call \`preview_status\`. If no automation-capable preview is attached, call \`preview_open\` before concluding that the browser is unavailable. Then use \`preview_navigate\`, \`preview_snapshot\`, and the focused interaction tools. Prefer snapshot-provided locators over coordinates.
 
-Do not switch to global browser skills, Chrome, Node REPL browser automation, standalone Playwright, or agent-browser merely because the preview is initially closed or a first call fails. Use an alternative browser system only when the T3 preview tools are absent, the user explicitly requests another browser, or \`preview_open\` returns an explicit unsupported/unavailable error. A failed T3 preview tool call should be inspected and retried with corrected arguments when the error is actionable.
+Do not switch to global browser skills, Chrome, Node REPL browser automation, standalone Playwright, or agent-browser merely because the preview is initially closed or a first call fails. Inspect failed preview calls and retry with corrected arguments when the error is actionable. Use another browser when the T3 preview tools are absent, \`preview_open\` reports unsupported/unavailable, the user explicitly requests it, or the task needs diagnostics the preview does not provide.
+
+T3 preview, Chrome DevTools MCP, and the OpenAI Browser plugin are separate browser connections. The OpenAI Browser plugin's empty browser list or unavailable \`iab\` backend does not establish whether T3 preview or Chrome DevTools MCP works. For T3's built-in browser, use \`preview_*\` directly; global Browser skills that require their own browser-client runtime describe a different connection.
+
+Use Chrome DevTools MCP when explicitly requested, for diagnostics that T3 preview does not provide (such as performance traces or heap snapshots), or as a fallback when T3 preview is unavailable. Keep the chosen browser's tabs and login state separate. Report which connection failed rather than declaring all browser access unavailable.
 `;
 
 const T3_CODE_DEVICE_TOOL_INSTRUCTIONS = `
@@ -36,7 +40,9 @@ const normalizeAvailability = (
  * from Playwright, agent-browser, and raw simctl/adb, so leaving them in would
  * talk it out of the only automation it still has.
  */
-const browserToolInstructions = (availability: boolean | T3CodeToolAvailability): string => {
+export const buildCodexToolInstructions = (
+  availability: boolean | T3CodeToolAvailability,
+): string => {
   const tools = normalizeAvailability(availability);
   return `${tools.browser ? T3_CODE_BROWSER_TOOL_INSTRUCTIONS : ""}${
     tools.device ? T3_CODE_DEVICE_TOOL_INSTRUCTIONS : ""
@@ -173,7 +179,7 @@ Do not ask "should I proceed?" in the final output. The user can easily switch o
 Only produce at most one \`<proposed_plan>\` block per turn, and only when you are presenting a complete spec.
 
 If the user stays in Plan mode and asks for revisions after a prior \`<proposed_plan>\`, any new \`<proposed_plan>\` must be a complete replacement. If the user indicates that the prior plan is not acceptable but does not provide enough information to produce a complete replacement, address the concern and continue planning without producing a \`<proposed_plan>\` block. If the follow-up neither requires changes nor calls the plan into question (e.g. clarifying question), answer it before the block, then reproduce the prior \`<proposed_plan>\` unchanged.
-${browserToolInstructions(browserToolsAvailable)}
+${buildCodexToolInstructions(browserToolsAvailable)}
 </collaboration_mode>`;
 
 const codexDefaultModeDeveloperInstructions = (
@@ -189,7 +195,7 @@ Your active mode changes only when new developer instructions with a different \
 Use the \`request_user_input\` tool only when it is listed in the available tools for this turn.
 
 In Default mode, strongly prefer making reasonable assumptions and executing the user's request rather than stopping to ask questions. If you absolutely must ask a question because the answer cannot be discovered from local context and a reasonable assumption would be risky, ask the user directly with a concise plain-text question. Never write a multiple choice question as a textual assistant message.
-${browserToolInstructions(browserToolsAvailable)}
+${buildCodexToolInstructions(browserToolsAvailable)}
 </collaboration_mode>`;
 
 export interface CodexRuntimeInfo {

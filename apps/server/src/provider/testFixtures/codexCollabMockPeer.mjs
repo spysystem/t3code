@@ -65,7 +65,20 @@ rl.on("line", (line) => {
     write({ id, result: { data: [] } });
     return;
   }
+  if (method === "config/read") {
+    write({
+      id,
+      result: { config: { developer_instructions: script.developerInstructions }, origins: {} },
+    });
+    return;
+  }
   if (method === "thread/start") {
+    if (script.recordThreadStart) {
+      NodeFS.appendFileSync(
+        `${process.env.T3_CODEX_COLLAB_SCRIPT}.requests`,
+        `${JSON.stringify({ method, params: message.params })}\n`,
+      );
+    }
     write({ id, result: fixture.responses.threadStart });
     return;
   }
