@@ -166,6 +166,50 @@ const peerPath = NodePath.join(
 );
 
 describe("CodexSessionRuntime collab integration", () => {
+  for (const capability of ["preview", "device", "none"]) {
+    it.effect(
+      `preserves configured instructions and delivers tool guidance for ${capability}`,
+      () =>
+        Effect.gen(function* () {
+          yield* Effect.addFinalizer(() =>
+            Effect.sync(() => {
+              NodeFS.rmSync(scriptPath, { force: true });
+              NodeFS.rmSync(`${scriptPath}.requests`, { force: true });
+            }),
+          );
+          NodeFS.writeFileSync(
+            scriptPath,
+            // @effect-diagnostics-next-line preferSchemaOverJson:off
+            JSON.stringify({
+              rootThreadId: ROOT,
+              recordThreadStart: true,
+              developerInstructions: "Keep the user's configured instructions.",
+              notifications: [],
+            }),
+          );
+          NodeFS.rmSync(`${scriptPath}.requests`, { force: true });
+          const runtime = yield* makeCodexSessionRuntime({
+            threadId: ThreadId.make(`thread-tool-guidance-${capability}`),
+            binaryPath: peerPath,
+            cwd: NodeOS.tmpdir(),
+            runtimeMode: "full-access",
+            appServerArgs:
+              capability === "none" ? [] : ["-c", 'mcp_servers.t3-code.url="http://127.0.0.1/mcp"'],
+            mcpCapabilities: new Set([capability]),
+            environment: { ...process.env, T3_CODEX_COLLAB_SCRIPT: scriptPath },
+          });
+          yield* runtime.start();
+          const instructions = readRecordedRequests()[0]?.params.developerInstructions;
+          assert.isString(instructions);
+          if (typeof instructions !== "string") throw new Error("Missing developer instructions");
+          assert.include(instructions, "Keep the user's configured instructions.");
+          assert.equal(instructions.includes("preview_open"), capability === "preview");
+          assert.equal(instructions.includes("device_open"), capability === "device");
+          yield* runtime.close;
+        }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+    );
+  }
+
   it.effect("looks up child model metadata once after activity registration", () =>
     Effect.gen(function* () {
       const script = {
