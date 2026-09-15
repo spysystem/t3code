@@ -41,6 +41,7 @@ import { codexSessionAppServerArgs } from "./codexLaunchArgs.ts";
 import { expandHomePath } from "../../pathExpansion.ts";
 import {
   buildCodexDeveloperInstructions,
+  buildCodexToolInstructions,
   type T3CodeToolAvailability,
 } from "../CodexDeveloperInstructions.ts";
 const decodeV2TurnStartResponse = Schema.decodeUnknownEffect(EffectCodexSchema.V2TurnStartResponse);
@@ -547,6 +548,8 @@ function buildThreadStartParams(input: {
   readonly runtimeMode: RuntimeMode;
   readonly model: string | undefined;
   readonly serviceTier: CodexServiceTier | undefined;
+  readonly browserToolsAvailable?: boolean | T3CodeToolAvailability;
+  readonly configuredDeveloperInstructions?: string;
 }): EffectCodexSchema.V2ThreadStartParams {
   const config = runtimeModeToThreadConfig(input.runtimeMode);
   return {
@@ -554,6 +557,15 @@ function buildThreadStartParams(input: {
     approvalPolicy: config.approvalPolicy,
     sandbox: config.sandbox,
     approvalsReviewer: config.approvalsReviewer,
+    // Some Codex runtimes replace collaboration-mode instructions with built-ins.
+    // Deliver tool guidance independently, including an empty override on resume
+    // when the session no longer has access to the previously described tools.
+    developerInstructions: [
+      input.configuredDeveloperInstructions,
+      buildCodexToolInstructions(input.browserToolsAvailable ?? false),
+    ]
+      .filter(Boolean)
+      .join("\n\n"),
     ...(input.model ? { model: input.model } : {}),
     ...(input.serviceTier ? { serviceTier: input.serviceTier } : {}),
   };
@@ -728,6 +740,8 @@ export const openCodexThread = (input: {
   readonly requestedModel: string | undefined;
   readonly serviceTier: CodexServiceTier | undefined;
   readonly resumeThreadId: string | undefined;
+  readonly browserToolsAvailable?: boolean | T3CodeToolAvailability;
+  readonly configuredDeveloperInstructions?: string;
 }): Effect.Effect<typeof CodexThreadResumeMetadata.Type, CodexErrors.CodexAppServerError> => {
   const resumeThreadId = input.resumeThreadId;
   const startParams = buildThreadStartParams({
@@ -735,6 +749,8 @@ export const openCodexThread = (input: {
     runtimeMode: input.runtimeMode,
     model: input.requestedModel,
     serviceTier: input.serviceTier,
+    browserToolsAvailable: input.browserToolsAvailable ?? false,
+    configuredDeveloperInstructions: input.configuredDeveloperInstructions ?? "",
   });
 
   if (resumeThreadId === undefined) {
@@ -2435,6 +2451,7 @@ export const makeCodexSessionRuntime = (
       yield* client.notify("initialized", undefined);
 
       const requestedModel = normalizeCodexModelSlug(options.model);
+      const { config } = yield* client.request("config/read", { cwd: options.cwd });
 
       const opened = yield* openCodexThread({
         client,
@@ -2444,6 +2461,11 @@ export const makeCodexSessionRuntime = (
         requestedModel,
         serviceTier: options.serviceTier,
         resumeThreadId: readResumeCursorThreadId(options.resumeCursor),
+        configuredDeveloperInstructions: config.developer_instructions ?? "",
+        browserToolsAvailable: configuredMcpToolAvailability(
+          options.appServerArgs,
+          options.mcpCapabilities,
+        ),
       });
 
       const providerThreadId = opened.thread.id;
