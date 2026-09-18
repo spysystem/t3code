@@ -508,7 +508,7 @@ export class ExternalLauncher extends Context.Service<
     /**
      * Launch a workspace path in a selected editor integration.
      *
-     * Launches the editor as a detached process so server startup is not blocked.
+     * Releases the launched process so it does not block the server's lifetime.
      */
     readonly launchEditor: (input: LaunchEditorInput) => Effect.Effect<void, ExternalLauncherError>;
   }
@@ -687,7 +687,14 @@ const launchAndUnref = Effect.fn("externalLauncher.launchAndUnref")(function* (
   onError: (cause: unknown) => ExternalLauncherError,
 ): Effect.fn.Return<void, ExternalLauncherError, ChildProcessSpawner.ChildProcessSpawner> {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
-  const command = ChildProcess.make(launch.command, launch.args, launch.options);
+  const platform = yield* HostProcessPlatform;
+  // Windows console helpers can exit before executing their script when started
+  // detached with ignored stdio. Unref below releases ownership without creating
+  // a detached console; keep the helper's window hidden instead.
+  const command = ChildProcess.make(launch.command, launch.args, {
+    ...launch.options,
+    ...(platform === "win32" ? { detached: false, windowsHide: true } : {}),
+  });
 
   yield* spawner.spawn(command).pipe(
     Effect.flatMap((handle) => handle.unref),
