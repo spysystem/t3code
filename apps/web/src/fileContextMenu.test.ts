@@ -3,6 +3,7 @@ import * as NodeAssert from "node:assert/strict";
 import { describe, expect, it } from "vite-plus/test";
 
 import { buildFileContextMenuItems, resolveFileContextMenuAbsolutePath } from "./fileContextMenu";
+import { resolveMarkdownFileLinkMeta } from "./markdown-links";
 
 const BASE_TARGET = {
   environmentId: EnvironmentId.make("environment-local"),
@@ -17,6 +18,21 @@ const EMPTY_CAPABILITIES = {
 };
 
 describe("resolveFileContextMenuAbsolutePath", () => {
+  it.each(["C:/workspace/.t3/reveal-repro", "C:/Users/developer/Downloads"])(
+    "resolves a spreadsheet identically from chat and a file browser rooted at %s",
+    (workspaceRoot) => {
+      const filePath = `${workspaceRoot}/Types (1).xlsx`;
+      expect(resolveMarkdownFileLinkMeta(filePath, "C:/workspace")?.filePath).toBe(filePath);
+      expect(
+        resolveFileContextMenuAbsolutePath({
+          ...BASE_TARGET,
+          workspaceRoot,
+          filePath: "Types (1).xlsx",
+        })?.replaceAll("\\", "/"),
+      ).toBe(filePath);
+    },
+  );
+
   it("joins workspace-relative diff paths onto the workspace root", () => {
     expect(resolveFileContextMenuAbsolutePath(BASE_TARGET)).toBe("/workspace/project/src/index.ts");
   });
