@@ -212,6 +212,19 @@ share** and **Open in file viewer**. Pictures, videos and PDFs keep their native
 other document formats such as Word or Pages open in the device's own viewer when it has one.
 If nothing on the device can show a format, save or share it to open it elsewhere.
 
+## Mermaid diagrams
+
+On web and desktop, fenced code blocks labelled `mermaid` render as diagrams in messages,
+plans, and Markdown file previews. Ask your agent for a Mermaid diagram or write a
+`mermaid` block in a Markdown file. During a response, the diagram appears when its code
+block is complete. Invalid diagrams keep their source visible so you can correct them.
+
+Use **Show source** to inspect the definition, **Show diagram** to return to the chart,
+and **Copy source** to reuse it. Click a diagram
+or choose **Expand** to zoom and pan. Copying a message keeps the Mermaid Markdown. Rendering
+happens locally; no external diagram service is needed. Installed upstream mobile apps
+retain their existing Markdown rendering.
+
 ## Images and videos in messages
 
 Select an image or video attachment or link to preview it. Playback support depends
