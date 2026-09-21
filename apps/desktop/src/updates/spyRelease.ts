@@ -6,6 +6,27 @@ const SPY_VERSION = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)-spy\.(0|[1-9]\d*)
 const RELEASE_API = "https://api.github.com/repos/spysystem/t3code/releases/latest";
 const RELEASE_TAG_URL = "https://github.com/spysystem/t3code/releases/tag/";
 
+/**
+ * Release artifacts the fork publishes per platform. Windows ships the NSIS
+ * installer; Linux ships the AppImage that `t3-spy-install` extracts. Both are
+ * x64 only, so the arch check stays separate from this table.
+ */
+const SPY_RELEASE_ASSETS = {
+  win32: { suffix: "-x64.exe", label: "Windows x64 installer" },
+  linux: { suffix: "-x86_64.AppImage", label: "Linux x86_64 AppImage" },
+} as const satisfies Partial<Record<NodeJS.Platform, { suffix: string; label: string }>>;
+
+export type SpyUpdatePlatform = keyof typeof SPY_RELEASE_ASSETS;
+
+/** Platforms the fork publishes desktop artifacts for. */
+export function isSpyUpdatePlatform(platform: NodeJS.Platform): platform is SpyUpdatePlatform {
+  return platform in SPY_RELEASE_ASSETS;
+}
+
+function spyReleaseAssetName(platform: SpyUpdatePlatform, version: string): string {
+  return `T3-Code-${version}${SPY_RELEASE_ASSETS[platform].suffix}`;
+}
+
 const GitHubRelease = Schema.Struct({
   tag_name: Schema.String,
   html_url: Schema.String,
@@ -37,6 +58,7 @@ export class SpyReleaseCheckError extends Schema.TaggedError<SpyReleaseCheckErro
 
 export const checkSpyRelease = Effect.fn("desktop.updates.checkSpyRelease")(function* (
   currentVersion: string,
+  platform: SpyUpdatePlatform,
 ) {
   const release = yield* Effect.gen(function* () {
     const client = (yield* HttpClient.HttpClient).pipe(HttpClient.filterStatusOk);
@@ -62,10 +84,12 @@ export const checkSpyRelease = Effect.fn("desktop.updates.checkSpyRelease")(func
     release.tag_name !== `spy-v${version}` ||
     !isSpyDesktopVersion(version) ||
     release.html_url !== `${RELEASE_TAG_URL}${release.tag_name}` ||
-    !release.assets.some((asset) => asset.name === `T3-Code-${version}-x64.exe` && asset.size > 0)
+    !release.assets.some(
+      (asset) => asset.name === spyReleaseAssetName(platform, version) && asset.size > 0,
+    )
   ) {
     return yield* new SpyReleaseCheckError({
-      message: "The latest GitHub release is not a published SPY Windows x64 installer.",
+      message: `The latest GitHub release is not a published SPY ${SPY_RELEASE_ASSETS[platform].label}.`,
     });
   }
   return isNewerSpyVersion(version, currentVersion) ? { version, url: release.html_url } : null;

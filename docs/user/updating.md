@@ -23,11 +23,19 @@ to allow recovery without a connected client.
 
 ## SPY desktop releases
 
-The SPY Windows x64 app checks for newer fork releases on startup and every four
-hours. Use **Check for updates** in the app menu or **Settings → About** to check
-manually. When an update is available, **View release on GitHub** opens its release
-page. Download the `.exe` under **Assets**, close T3 Code, and run the installer.
-The app does not download or install updates automatically.
+The SPY app checks for newer fork releases on startup and every four hours on
+Windows x64 and Linux x86_64. Use **Check for updates** in the app menu or
+**Settings → About** to check manually. When an update is available, **View
+release on GitHub** opens its release page. The app never downloads or installs
+updates automatically; finish the update for your platform:
+
+| Platform     | Asset under **Assets**              | How to install                            |
+| ------------ | ----------------------------------- | ----------------------------------------- |
+| Windows x64  | `T3-Code-<version>-x64.exe`         | Close T3 Code and run the installer.      |
+| Linux x86_64 | `T3-Code-<version>-x86_64.AppImage` | Run `t3-spy-install --version <version>`. |
+
+Installing never touches `~/.t3`, so projects, threads, provider credentials and
+the environment ID survive the upgrade.
 
 Dismissing an update notification hides it until a different version is available;
 the release remains accessible through Settings and the sidebar update button.

@@ -27,7 +27,10 @@ function stubRelease() {
         html_url: releaseUrl,
         draft: false,
         prerelease: false,
-        assets: [{ name: "T3-Code-0.0.41-spy.10-x64.exe", size: 100 }],
+        assets: [
+          { name: "T3-Code-0.0.41-spy.10-x64.exe", size: 100 },
+          { name: "T3-Code-0.0.41-spy.10-x86_64.AppImage", size: 100 },
+        ],
       }),
     ),
   );
@@ -110,6 +113,29 @@ describe("SPY desktop manual updates", () => {
         assert.equal(failed.state.status, "error");
         assert.equal(failed.state.errorContext, "check");
         assert.equal((yield* updates.check("menu")).state.status, "available");
+      }),
+    ).pipe(Effect.provide(harness.layer), Effect.provideService(FetchHttpClient.Fetch, fetchMock));
+  });
+
+  it.effect("enables checks on Linux x86_64 and finds the AppImage release", () => {
+    stubRelease();
+    const harness = makeHarness({ ...spyOptions, platform: "linux" });
+    return Effect.scoped(
+      Effect.gen(function* () {
+        const updates = yield* DesktopUpdates.DesktopUpdates;
+        yield* updates.configure;
+        assert.equal(Option.isNone(yield* updates.disabledReason), true);
+        assert.equal((yield* updates.getState).status, "idle");
+        const result = yield* updates.check("menu");
+        assert.equal(result.checked, true);
+        assert.equal(result.state.status, "available");
+        assert.equal(result.state.manual, true);
+        assert.equal(result.state.availableVersion, "0.0.41-spy.10");
+        assert.equal(result.state.releaseUrl, releaseUrl);
+        // Linux must never fall through to the electron-updater feed.
+        assert.equal(harness.checkCount(), 0);
+        assert.equal(harness.downloadCount(), 0);
+        assert.deepEqual(harness.feedUrls(), []);
       }),
     ).pipe(Effect.provide(harness.layer), Effect.provideService(FetchHttpClient.Fetch, fetchMock));
   });

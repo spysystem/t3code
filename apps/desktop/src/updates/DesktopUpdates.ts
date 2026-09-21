@@ -33,7 +33,7 @@ import * as IpcChannels from "../ipc/channels.ts";
 import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
 import { normalizeDesktopUpdateReleaseNotes } from "./releaseNotes.ts";
 import { resolveDefaultDesktopUpdateChannel } from "./updateChannels.ts";
-import { checkSpyRelease, isSpyDesktopVersion } from "./spyRelease.ts";
+import { checkSpyRelease, isSpyDesktopVersion, isSpyUpdatePlatform } from "./spyRelease.ts";
 import {
   createInitialDesktopUpdateState,
   reduceDesktopUpdateStateOnCheckFailure,
@@ -283,6 +283,10 @@ export const make = Effect.gen(function* () {
   const fileSystem = yield* FileSystem.FileSystem;
   const desktopSettings = yield* DesktopAppSettings.DesktopAppSettings;
   const manualUpdates = isSpyDesktopVersion(environment.appVersion);
+  // Narrowed once here; `check` only runs when resolveDisabledReason accepted the platform.
+  const spyUpdatePlatform = isSpyUpdatePlatform(environment.platform)
+    ? environment.platform
+    : "win32";
 
   const appUpdateYmlConfigRef = yield* Ref.make<Option.Option<AppUpdateYmlConfig>>(Option.none());
   const activeUpdateActionRef = yield* Ref.make<Option.Option<UpdateAction>>(Option.none());
@@ -344,8 +348,9 @@ export const make = Effect.gen(function* () {
           ? "SPY update checks are only available in packaged production builds."
           : config.disableAutoUpdate
             ? "Update checks are disabled by the T3CODE_DISABLE_AUTO_UPDATE setting."
-            : environment.platform !== "win32" || environment.runtimeInfo.appArch !== "x64"
-              ? "SPY update checks currently support Windows x64 builds."
+            : !isSpyUpdatePlatform(environment.platform) ||
+                environment.runtimeInfo.appArch !== "x64"
+              ? "SPY update checks currently support Windows x64 and Linux x86_64 builds."
               : null,
       );
     }
@@ -429,7 +434,7 @@ export const make = Effect.gen(function* () {
       yield* logUpdaterInfo("checking for updates", { reason });
 
       if (manualUpdates) {
-        return yield* checkSpyRelease(environment.appVersion).pipe(
+        return yield* checkSpyRelease(environment.appVersion, spyUpdatePlatform).pipe(
           Effect.flatMap((release) =>
             updateState((current) => {
               const { releaseUrl: _previousUrl, ...base } = current;
