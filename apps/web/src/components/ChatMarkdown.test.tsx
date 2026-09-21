@@ -8,6 +8,9 @@ import { getSyntaxHighlighterPromise } from "../lib/syntaxHighlighting";
 import { GitHubIcon } from "./Icons";
 import { Button } from "./ui/button";
 import { setMarkdownTaskChecked } from "./files/filePreviewMode";
+import { renderMermaid } from "../lib/mermaid";
+
+vi.mock("../lib/mermaid", () => ({ renderMermaid: vi.fn() }));
 
 vi.mock("@effect/atom-react", () => ({ useAtomValue: () => null }));
 vi.mock("../hooks/useTheme", () => ({ useTheme: () => ({ resolvedTheme: "dark" }) }));
@@ -72,6 +75,121 @@ function codeButton(renderer: ReactTestRenderer, label: string) {
   if (!button) throw new Error(`Missing code button: ${label}`);
   return button.props as ComponentProps<typeof Button>;
 }
+
+describe("Mermaid Markdown", () => {
+  it.each([
+    ["```mermaid\ngraph TD\nA --> B\n", "```"],
+    ["~~~~mermaid\ngraph TD\nA --> B\n", "~~~~"],
+    ["> ```mermaid\n> graph TD\n> A --> B\n", "> ```"],
+    ["- Diagram\n\n  ```mermaid\n  graph TD\n  A --> B\n", "  ```"],
+    ["```mermaid\r\ngraph TD\r\nA --> B\r\n", "```"],
+    ["```MERMAID\ngraph TD\nA --> B\n", "```"],
+  ])("renders a closed streaming fence once: %s", async (prefix, closing) => {
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    const render = vi
+      .mocked(renderMermaid)
+      .mockReset()
+      .mockResolvedValue("data:image/svg+xml,test");
+    let renderer: ReactTestRenderer | undefined;
+    try {
+      await act(async () => {
+        renderer = create(<ChatMarkdown cwd={undefined} text={prefix} isStreaming />);
+      });
+      expect(render).not.toHaveBeenCalled();
+      await act(async () => {
+        renderer!.update(<ChatMarkdown cwd={undefined} text={prefix + closing} isStreaming />);
+      });
+      expect(render).toHaveBeenCalledExactlyOnceWith(
+        prefix.includes("\r") ? "graph TD\r\nA --> B\n" : "graph TD\nA --> B\n",
+        "dark",
+      );
+      expect(renderer!.root.findByType("img").props.src).toBe("data:image/svg+xml,test");
+      await act(async () => {
+        renderer!.update(
+          <ChatMarkdown
+            cwd={undefined}
+            text={prefix + closing + "\n\nMore explanation"}
+            isStreaming
+          />,
+        );
+      });
+      expect(render).toHaveBeenCalledTimes(1);
+    } finally {
+      await act(async () => renderer?.unmount());
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("keeps source available after errors and recovers when a file changes", async () => {
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal("window", {});
+    vi.stubGlobal("navigator", { clipboard: { writeText } });
+    const render = vi
+      .mocked(renderMermaid)
+      .mockReset()
+      .mockRejectedValueOnce(new Error("Parse error"));
+    let renderer: ReactTestRenderer | undefined;
+    try {
+      await act(async () => {
+        renderer = create(<ChatMarkdown cwd={undefined} text={"```mermaid\nbroken\n```"} />);
+      });
+      expect(renderer!.root.findByType("code").children).toEqual(["broken\n"]);
+      expect(renderer!.root.findByProps({ role: "status" }).children.join("")).toContain(
+        "Could not render",
+      );
+      render.mockResolvedValue("data:image/svg+xml,fixed");
+      await act(async () => {
+        renderer!.update(
+          <ChatMarkdown cwd={undefined} text={"```mermaid\ngraph TD; A --> B\n```"} />,
+        );
+      });
+      expect(renderer!.root.findByType("img").props.src).toBe("data:image/svg+xml,fixed");
+      const button = (label: string) =>
+        renderer!.root.findAllByType(Button).find((item) => item.props.children === label)!;
+      await act(async () => button("Show source").props.onClick());
+      expect(renderer!.root.findByType("code").children).toEqual(["graph TD; A --> B\n"]);
+      await act(async () => button("Copy source").props.onClick());
+      expect(writeText).toHaveBeenCalledWith("graph TD; A --> B\n");
+      await act(async () => button("Show diagram").props.onClick());
+      expect(renderer!.root.findByType("img").props.src).toBe("data:image/svg+xml,fixed");
+      expect(render).toHaveBeenCalledTimes(2);
+    } finally {
+      await act(async () => renderer?.unmount());
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("ignores stale renders when the diagram changes", async () => {
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    let resolveOld: (url: string) => void = () => {};
+    const old = new Promise<string>((resolve) => {
+      resolveOld = resolve;
+    });
+    vi.mocked(renderMermaid)
+      .mockReset()
+      .mockReturnValueOnce(old)
+      .mockResolvedValue("data:image/svg+xml,new");
+    let renderer: ReactTestRenderer | undefined;
+    try {
+      await act(async () => {
+        renderer = create(
+          <ChatMarkdown cwd={undefined} text={"```mermaid\ngraph TD; A --> B\n```"} />,
+        );
+      });
+      await act(async () => {
+        renderer!.update(
+          <ChatMarkdown cwd={undefined} text={"```mermaid\ngraph TD; C --> D\n```"} />,
+        );
+      });
+      await act(async () => resolveOld("data:image/svg+xml,old"));
+      expect(renderer!.root.findByType("img").props.src).toBe("data:image/svg+xml,new");
+    } finally {
+      await act(async () => renderer?.unmount());
+      vi.unstubAllGlobals();
+    }
+  });
+});
 
 describe("ChatMarkdown context references", () => {
   it("renders text and image references through the chip renderer, with readable fallback", async () => {
