@@ -8,7 +8,11 @@ You are running inside T3 Code. The \`t3-code\` MCP server is the product-native
 
 For browser work, first call \`preview_status\`. If no automation-capable preview is attached, call \`preview_open\` before concluding that the browser is unavailable. Then use \`preview_navigate\`, \`preview_snapshot\`, and the focused interaction tools. Prefer snapshot-provided locators over coordinates.
 
-Do not switch to global browser skills, Chrome, Node REPL browser automation, standalone Playwright, or agent-browser merely because the preview is initially closed or a first call fails. Use an alternative browser system only when the T3 preview tools are absent, the user explicitly requests another browser, or \`preview_open\` returns an explicit unsupported/unavailable error. A failed T3 preview tool call should be inspected and retried with corrected arguments when the error is actionable.`;
+Do not switch to global browser skills, Chrome, Node REPL browser automation, standalone Playwright, or agent-browser merely because the preview is initially closed or a first call fails. Inspect failed preview calls and retry with corrected arguments when the error is actionable. Use another browser when the T3 preview tools are absent, \`preview_open\` reports unsupported/unavailable, the user explicitly requests it, or the task needs diagnostics the preview does not provide.
+
+T3 preview, Chrome DevTools MCP, and the OpenAI Browser plugin are separate browser connections. The OpenAI Browser plugin's empty browser list or unavailable \`iab\` backend does not establish whether T3 preview or Chrome DevTools MCP works. For T3's built-in browser, use \`preview_*\` directly; global Browser skills that require their own browser-client runtime describe a different connection.
+
+Use Chrome DevTools MCP when explicitly requested, for diagnostics that T3 preview does not provide (such as performance traces or heap snapshots), or as a fallback when T3 preview is unavailable. Keep the chosen browser's tabs and login state separate. Report which connection failed rather than declaring all browser access unavailable.`;
 
 const T3_CODE_DEVICE_TOOL_INSTRUCTIONS = `## T3 Code devices
 
