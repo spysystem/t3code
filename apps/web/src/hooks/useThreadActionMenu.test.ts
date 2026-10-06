@@ -48,6 +48,7 @@ vi.mock("../state/session", () => ({
 }));
 vi.mock("../state/entities", () => ({
   readEnvironmentSupportsAutoSettleOptOut: () => true,
+  readEnvironmentSupportsNativeThreadId: () => true,
   readEnvironmentSupportsPinning: () => true,
   readEnvironmentSupportsSettlement: () => true,
   readEnvironmentSupportsSnooze: () => true,
