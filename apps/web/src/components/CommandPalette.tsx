@@ -104,6 +104,7 @@ import {
   copyPromptLink,
   promptLinkRepositoryOf,
 } from "./promptLinks/copyPromptLink";
+import { useCopyNativeThreadId } from "../hooks/useCopyNativeThreadId";
 import { useClientSettings } from "../hooks/useSettings";
 import { useTheme } from "../hooks/useTheme";
 import { useCustomThemes } from "../hooks/useCustomThemes";
@@ -643,6 +644,7 @@ function OpenCommandPaletteDialog(props: {
   const { environments } = useEnvironments();
   const desktopLocalBootstraps = useDesktopLocalBootstraps();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
+  const copyNativeThreadId = useCopyNativeThreadId();
   const availableSettingsSearchItems = useAvailableSettingsSearchItems();
   const { activeDraftThread, activeThread, defaultProjectRef, handleNewThread } =
     useHandleNewThread();
@@ -1918,6 +1920,30 @@ function OpenCommandPaletteDialog(props: {
         });
       }
     }
+  }
+
+  if (
+    activeThread !== null &&
+    activeThreadServerConfig?.environment.capabilities.nativeThreadId === true
+  ) {
+    const threadRef = scopeThreadRef(activeThread.environmentId, activeThread.id);
+    actionItems.push({
+      kind: "action",
+      value: "action:copy-native-thread-id",
+      searchTerms: [
+        "copy",
+        "native",
+        "provider",
+        "codex",
+        "claude",
+        "session",
+        "thread id",
+        "telemetry",
+      ],
+      title: "Copy native thread ID",
+      icon: <LinkIcon className={ITEM_ICON_CLASS} />,
+      run: () => copyNativeThreadId(threadRef),
+    });
   }
 
   if (activeThreadReferenceCopyTarget !== null) {
