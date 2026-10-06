@@ -135,6 +135,7 @@ import { registerSettleAndAdvance } from "../settleAndAdvance";
 import { startNewThreadFromContext } from "../lib/chatThreadActions";
 import { useClientSettings } from "../hooks/useSettings";
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
+import { useCopyNativeThreadId } from "../hooks/useCopyNativeThreadId";
 import { useLocalStorage } from "../hooks/useLocalStorage";
 import { useNowMinute } from "../hooks/useNowMinute";
 import {
@@ -967,6 +968,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
       );
     },
   });
+  const copyNativeThreadId = useCopyNativeThreadId();
   const { copyToClipboard: copyThreadIdToClipboard } = useCopyToClipboard<{ threadId: ThreadId }>({
     onError: (error) => {
       toastManager.add(
@@ -2663,6 +2665,9 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                 snooze: configLoaded,
                 pinning: configLoaded,
                 titleRegeneration: configLoaded,
+                nativeThreadId:
+                  serverConfigs.get(thread.environmentId)?.environment.capabilities
+                    .nativeThreadId === true,
               },
               snoozePresets,
             }),
@@ -2821,6 +2826,9 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
             return;
           case "copy-thread-id":
             copyThreadIdToClipboard(thread.id, { threadId: thread.id });
+            return;
+          case "copy-native-thread-id":
+            await copyNativeThreadId(threadRef);
             return;
           case "archive": {
             if (confirmThreadArchive) {
