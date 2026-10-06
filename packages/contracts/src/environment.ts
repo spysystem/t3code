@@ -125,6 +125,8 @@ export const ExecutionEnvironmentCapabilities = Schema.Struct({
   threadAutoSettleOptOut: Schema.optionalKey(Schema.Boolean),
   threadTitleRegeneration: Schema.optionalKey(Schema.Boolean),
   threadVisitedTracking: Schema.optionalKey(Schema.Boolean),
+  /** Supports reading the provider's native thread ID on demand. */
+  nativeThreadId: Schema.optionalKey(Schema.Boolean),
   threadPullRequestLinking: Schema.optionalKey(Schema.Boolean),
   serverResolvedCommandContext: Schema.optionalKey(Schema.Boolean),
   threadPullRequests: Schema.optionalKey(Schema.Boolean),
