@@ -72,6 +72,7 @@ import {
   ProjectSearchEntriesError,
   ProjectWriteFileError,
   ProjectMutationError,
+  ProviderGetNativeThreadIdError,
   ProviderUploadFeedbackError,
   ProviderSetupError,
   RelayClientInstallFailedError,
@@ -165,6 +166,7 @@ import * as AcpRegistryRuntimeCoordinator from "@t3tools/provider-acp-registry/s
 import * as ModelManifest from "./provider/ModelManifest.ts";
 import * as ProviderLatestVersions from "@t3tools/provider-core/server/ProviderLatestVersions";
 import { latestProviderVersionCacheKeys } from "@t3tools/provider-core/server/maintenanceResolver";
+import { readNativeThreadId } from "./provider/nativeThreadId.ts";
 import * as ProviderMaintenanceRunner from "./provider/providerMaintenanceRunner.ts";
 import * as ProviderAuthService from "./provider/ProviderAuthService.ts";
 import { makeProviderInstallation } from "./provider/providerInstallation.ts";
@@ -2174,6 +2176,13 @@ export const layerWsRpc = (
                 yield* providerRegistry.refreshInstance(input.instanceId);
                 return { loggedOut: true } as const;
               }),
+            ),
+          ),
+        [WS_METHODS.providerGetNativeThreadId]: (input) =>
+          threadManagement.getThreadRecords(input.threadId, ["providerThreads"]).pipe(
+            Effect.map((projection) => ({ nativeThreadId: readNativeThreadId(projection) })),
+            Effect.mapError(
+              (cause) => new ProviderGetNativeThreadIdError({ threadId: input.threadId, cause }),
             ),
           ),
         [WS_METHODS.serverRefreshProviders]:
