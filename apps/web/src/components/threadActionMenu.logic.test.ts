@@ -25,6 +25,12 @@ const baseState: ThreadActionMenuState = {
   ],
 };
 
+function allIds(state: ThreadActionMenuState): string[] {
+  const flatten = (items: ReturnType<typeof buildThreadActionMenuItems>): string[] =>
+    items.flatMap((item) => [item.id, ...(item.children ? flatten(item.children) : [])]);
+  return flatten(buildThreadActionMenuItems(state));
+}
+
 describe("buildThreadActionMenuItems", () => {
   it.each([false, true])(
     "disables both lifecycle directions without permission (reversed: %s)",
@@ -64,6 +70,16 @@ describe("buildThreadActionMenuItems", () => {
       ).toBe(true);
     },
   );
+
+  it("offers native ID copying only when the server supports it, retaining T3 ID copying", () => {
+    expect(allIds(baseState)).not.toContain("copy-native-thread-id");
+    const supported = allIds({
+      ...baseState,
+      supports: { ...baseState.supports, nativeThreadId: true },
+    });
+    expect(supported).toContain("copy-thread-id");
+    expect(supported).toContain("copy-native-thread-id");
+  });
 
   it("disables archive while the thread is running", () => {
     const archiveItem = buildThreadActionMenuItems({ ...baseState, isRunning: true }).find(
