@@ -29,6 +29,7 @@ export type ThreadActionMenuId =
   | "copy-branch"
   | "copy-thread"
   | "copy-thread-id"
+  | "copy-native-thread-id"
   | "archive"
   | "delete";
 
@@ -117,6 +118,7 @@ export interface ThreadActionMenuState {
     readonly snooze: boolean;
     readonly pinning: boolean;
     readonly titleRegeneration: boolean;
+    readonly nativeThreadId?: boolean;
   };
   readonly snoozePresets: ReadonlyArray<SnoozePreset>;
   /** Guest links need their own grant, so the caller checks it instead of `canOperate`. */
@@ -291,6 +293,15 @@ export function buildThreadActionMenuItems(
           icon: "message-square",
         },
         { id: "copy-thread-id", label: resolve(msg("Thread ID")), icon: "hash" },
+        ...(state.supports.nativeThreadId
+          ? [
+              {
+                id: "copy-native-thread-id" as const,
+                label: resolve(msg("Native thread ID")),
+                icon: "hash",
+              },
+            ]
+          : []),
       ],
     },
     { id: "project-settings", label: resolve(msg("Project settings")), icon: "settings" },
