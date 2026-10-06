@@ -71,6 +71,7 @@ import {
   ProjectSearchEntriesError,
   ProjectWriteFileError,
   ProjectMutationError,
+  ProviderGetNativeThreadIdError,
   ProviderUploadFeedbackError,
   ProviderSetupError,
   RelayClientInstallFailedError,
@@ -170,6 +171,7 @@ import * as AcpRegistrySupport from "./provider/acp/AcpRegistrySupport.ts";
 import * as AcpRegistryRuntimeCoordinator from "./provider/acp/AcpRegistryRuntimeCoordinator.ts";
 import * as ModelManifest from "./provider/ModelManifest.ts";
 import * as ProviderMaintenance from "./provider/providerMaintenance.ts";
+import { readNativeThreadId } from "./provider/nativeThreadId.ts";
 import * as ProviderMaintenanceRunner from "./provider/providerMaintenanceRunner.ts";
 import * as ProviderAuthService from "./provider/ProviderAuthService.ts";
 import { makeProviderInstallation } from "./provider/providerInstallation.ts";
@@ -2342,6 +2344,17 @@ const layerWsRpc = (
               return { providers };
             }),
             { "rpc.aggregate": "server" },
+          ),
+        [WS_METHODS.providerGetNativeThreadId]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.providerGetNativeThreadId,
+            threadManagement.getThreadRecords(input.threadId, ["providerThreads"]).pipe(
+              Effect.map((projection) => ({ nativeThreadId: readNativeThreadId(projection) })),
+              Effect.mapError(
+                (cause) => new ProviderGetNativeThreadIdError({ threadId: input.threadId, cause }),
+              ),
+            ),
+            { "rpc.aggregate": "provider" },
           ),
         [WS_METHODS.providerUploadFeedback]: (input) =>
           observeRpcEffect(
