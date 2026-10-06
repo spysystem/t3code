@@ -187,6 +187,9 @@ import {
 import { KeybindingsConfigError } from "./keybindings.ts";
 import { OrchestrationSearchThreadsError } from "./threadSearch.ts";
 import {
+  ProviderGetNativeThreadIdError,
+  ProviderGetNativeThreadIdInput,
+  ProviderGetNativeThreadIdResult,
   ProviderMcpSignInCompleteInput,
   ProviderMcpSignInCompleteResult,
   ProviderMcpSignInError,
@@ -520,6 +523,7 @@ export const WS_METHODS = {
   mcpAppsReadResource: "mcpApps.readResource",
   mcpAppsUpdateModelContext: "mcpApps.updateModelContext",
 
+  providerGetNativeThreadId: "provider.getNativeThreadId",
   providerUploadFeedback: "provider.uploadFeedback",
   providerMcpSignInStart: "provider.mcpSignIn.start",
   providerMcpSignInComplete: "provider.mcpSignIn.complete",
@@ -1807,6 +1811,12 @@ const WsMcpAppsReadResourceRpc = Rpc.make(WS_METHODS.mcpAppsReadResource, {
   error: Schema.Union([McpAppRequestError, EnvironmentAuthorizationError]),
 });
 
+const WsProviderGetNativeThreadIdRpc = Rpc.make(WS_METHODS.providerGetNativeThreadId, {
+  payload: ProviderGetNativeThreadIdInput,
+  success: ProviderGetNativeThreadIdResult,
+  error: Schema.Union([ProviderGetNativeThreadIdError, EnvironmentAuthorizationError]),
+});
+
 const WsProviderUploadFeedbackRpc = Rpc.make(WS_METHODS.providerUploadFeedback, {
   payload: ProviderUploadFeedbackInput,
   success: ProviderUploadFeedbackResult,
@@ -2656,6 +2666,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsMcpAppsToolInfoRpc,
   WsMcpAppsReadResourceRpc,
   WsMcpAppsUpdateModelContextRpc,
+  WsProviderGetNativeThreadIdRpc,
   WsProviderUploadFeedbackRpc,
   WsProviderMcpSignInStartRpc,
   WsProviderMcpSignInCompleteRpc,
