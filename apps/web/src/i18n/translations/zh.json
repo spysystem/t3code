@@ -13046,5 +13046,13 @@
   "1384406d575b5788": "Title pattern",
   "babab583995c0d91": "Link template",
   "17894372adb439a9": "Add rule",
-  "5c0c5547b5e99887": "Sample thread title"
+  "5c0c5547b5e99887": "Sample thread title",
+  "a27519e928e7dc62": "Native thread ID",
+  "f88b0907e6780beb": "Clipboard API is unavailable while copying the native thread ID.",
+  "c2a9ee49e1d1c666": "Failed to copy the native thread ID to the clipboard.",
+  "69c791ac0229e64f": "Failed to read native thread ID",
+  "6148e3a78ba14a66": "Native thread ID unavailable",
+  "6a04e336c78ea8cb": "This thread does not have a saved native provider ID.",
+  "713f30716f81d8b0": "Native thread ID copied",
+  "1bb83e00b15ee30c": "Failed to copy native thread ID"
 }
