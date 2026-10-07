@@ -523,6 +523,46 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     ),
   );
 
+  // SPY releases add the .rpm for the fork's dnf repository.
+  it.effect("adds an rpm matching the deb for SPY Linux releases", () =>
+    Effect.gen(function* () {
+      const linux = yield* createBuildConfig(
+        "linux",
+        "AppImage",
+        "1.2.3",
+        false,
+        false,
+        undefined,
+        undefined,
+      );
+      const spyLinux = yield* createBuildConfig(
+        "linux",
+        "AppImage",
+        "1.2.3-spy.4",
+        false,
+        false,
+        undefined,
+        undefined,
+      );
+
+      assert.deepStrictEqual((linux.linux as Record<string, unknown>).target, ["AppImage", "deb"]);
+      assert.deepStrictEqual((spyLinux.linux as Record<string, unknown>).target, [
+        "AppImage",
+        "deb",
+        "rpm",
+      ]);
+      assert.includeMembers((spyLinux.rpm as { depends: string[] }).depends, [
+        "alsa-lib",
+        "libsecret",
+        "mesa-libgbm",
+      ]);
+      assert.deepStrictEqual(
+        (spyLinux.rpm as { fpm: string[] }).fpm,
+        (spyLinux.deb as { fpm: string[] }).fpm,
+      );
+    }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),
+  );
+
   // pnpm writes "set this to true or false" placeholders into allowBuilds when a
   // tarball changes. pnpm ignores them, but the release build decode rejects them.
   it.effect("decodes the repo allowBuilds and every file: tarball it names exists", () =>

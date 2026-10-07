@@ -176,13 +176,13 @@ describe("DesktopAppIdentity", () => {
   );
 
   it.effect.each([
-    { stage: "Beta", environment: {} },
+    { stage: "SPY", environment: {} },
     {
-      stage: "Nightly",
+      stage: "SPY Nightly",
       environment: { appVersion: "0.0.43-nightly.20260929.2428" },
     },
     {
-      stage: "Dev",
+      stage: "SPY Dev",
       environment: { env: { VITE_DEV_SERVER_URL: "http://localhost:5173" } },
     },
   ])("uses a valid native User-Agent product name for $stage", ({ stage, environment }) => {
