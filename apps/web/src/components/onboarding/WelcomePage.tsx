@@ -9,6 +9,7 @@ import type {
   ServerConfig,
   ServerProvider,
 } from "@t3tools/contracts";
+import { APP_FORK_LABEL } from "@t3tools/shared/branding";
 import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { resolveProviderInstanceDisplayName as agentName } from "@t3tools/client-runtime/state/provider-instance-display";
 import {
@@ -280,7 +281,7 @@ export function WelcomePage({
         <div className="min-h-0 flex-1 overflow-y-auto scrollbar-gutter-both">
           <div className="mx-auto flex min-h-full w-full max-w-3xl flex-col px-6 pt-12 pb-8 sm:pt-20">
             <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-              <T>Welcome to T3 Code</T>
+              <T>Welcome to T3 Code</T> ({APP_FORK_LABEL})
             </h1>
             <p className="mt-1.5 text-sm text-muted-foreground">
               <T>
