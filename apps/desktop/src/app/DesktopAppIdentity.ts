@@ -1,3 +1,4 @@
+import { formatAppVariantLabel } from "@t3tools/shared/branding";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -93,7 +94,7 @@ export const make = Effect.gen(function* () {
     const commitHash = yield* resolveAboutCommitHash;
     // Electron strips spaces but keeps parentheses in its User-Agent token, breaking Turnstile in preview sessions.
     yield* electronApp.setName(
-      `${environment.branding.baseName} ${environment.branding.stageLabel}`,
+      `${environment.branding.baseName} ${formatAppVariantLabel(environment.branding.stageLabel)}`,
     );
     yield* electronApp.setAboutPanelOptions({
       applicationName: environment.displayName,
