@@ -1,0 +1,4 @@
+interface:
+  display_name: "Sync T3 upstream"
+  short_description: "Rebase, push, and build the SPY T3 fork for testing"
+  default_prompt: "Use $sync-t3-upstream to update this fork from upstream, preserve my local work, verify the rebase, push, and build a local Windows/Linux candidate for me to install and test before publication."
