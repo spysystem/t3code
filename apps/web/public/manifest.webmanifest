@@ -1,5 +1,7 @@
 {
   "id": "/",
+  "name": "T3 Code (SPY)",
+  "short_name": "T3 SPY",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
