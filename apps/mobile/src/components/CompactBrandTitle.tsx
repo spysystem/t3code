@@ -2,6 +2,7 @@ import { NATIVE_WORKSPACE_COLUMNS_SUPPORTED } from "../native/NativeWorkspaceCol
 import Constants from "expo-constants";
 import type { NativeStackNavigationOptions } from "@react-navigation/native-stack";
 import { Platform, View } from "react-native";
+import { formatAppVariantLabel } from "@t3tools/shared/branding";
 
 import { AppText as Text } from "./ui/AppText";
 import { T3Wordmark } from "./T3Wordmark";
@@ -27,7 +28,7 @@ export function CompactBrandTitle(
   return (
     <View
       aria-level={1}
-      accessibilityLabel={props.accessibilityLabel ?? "T3 Code, Threads"}
+      accessibilityLabel={props.accessibilityLabel ?? "T3 Code (SPY), Threads"}
       accessible
       role="heading"
       className="flex-row items-center gap-1.5"
@@ -54,7 +55,7 @@ export function CompactBrandTitle(
           className="font-t3-bold text-foreground-muted uppercase"
           style={{ fontSize: 9 * scale, letterSpacing: 0.9 * scale }}
         >
-          {stageLabel}
+          {formatAppVariantLabel(stageLabel)}
         </Text>
       </View>
     </View>
