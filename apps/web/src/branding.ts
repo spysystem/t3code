@@ -1,9 +1,6 @@
 import type { DesktopAppBranding } from "@t3tools/contracts";
-import {
-  formatAppDisplayName,
-  resolveHostedAppChannelLabel,
-  resolveWebAppStageLabel,
-} from "./branding.logic";
+import { formatAppDisplayName } from "@t3tools/shared/branding";
+import { resolveHostedAppChannelLabel, resolveWebAppStageLabel } from "./branding.logic";
 
 function readInjectedDesktopAppBranding(): DesktopAppBranding | null {
   if (typeof window === "undefined") {
