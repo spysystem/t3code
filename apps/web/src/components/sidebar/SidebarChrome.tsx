@@ -1,6 +1,7 @@
 import { ArrowLeftIcon, ArrowRightIcon, ChartNoAxesColumnIcon, SettingsIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { memo } from "react";
+import { APP_FORK_LABEL } from "@t3tools/shared/branding";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 
 import { useAtomValue } from "@effect/atom-react";
@@ -165,7 +166,7 @@ function HistoryNavigationButton({
 function SidebarBrand({ onBackdrop }: { onBackdrop: boolean }) {
   return (
     <Link
-      aria-label="T3 Code home"
+      aria-label="T3 Code (SPY) home"
       className={cn(
         "relative z-10 ml-[var(--workspace-titlebar-content-left)] hidden h-7 w-fit min-w-0 shrink-0 items-center overflow-hidden rounded-md outline-hidden ring-ring focus-visible:ring-2 focus-visible:ring-inset md:flex",
         onBackdrop ? "text-white" : "text-foreground",
@@ -188,6 +189,14 @@ function SidebarBrandMark({ onBackdrop }: { onBackdrop: boolean }) {
         )}
       >
         Code
+      </span>
+      <span
+        className={cn(
+          "ml-1 inline-flex h-5 shrink-0 items-center rounded-full px-1.5 text-xs font-medium leading-none sm:h-4 sm:text-3xs",
+          onBackdrop ? "bg-white/15 text-white" : "bg-secondary text-secondary-foreground",
+        )}
+      >
+        {APP_FORK_LABEL}
       </span>
     </span>
   );
