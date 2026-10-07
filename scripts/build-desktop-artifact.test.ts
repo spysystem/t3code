@@ -272,8 +272,8 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
   });
 
   it("switches desktop packaging product names to nightly for nightly builds", () => {
-    assert.equal(resolveDesktopProductName("0.0.17"), "T3 Code (Alpha)");
-    assert.equal(resolveDesktopProductName("0.0.17-nightly.20260413.42"), "T3 Code (Nightly)");
+    assert.equal(resolveDesktopProductName("0.0.17"), "T3 Code (SPY)");
+    assert.equal(resolveDesktopProductName("0.0.17-nightly.20260413.42"), "T3 Code (SPY Nightly)");
   });
 
   it("switches desktop packaging icons to the nightly artwork for nightly versions", () => {
@@ -682,7 +682,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         "**/*.map",
       ]);
       assert.deepStrictEqual(mac.dmg, {
-        title: "T3 Code (Alpha) 1.2.3 Installer",
+        title: "T3 Code (SPY) 1.2.3 Installer",
         background: "dmg/dmg-background-latest.png",
         window: { width: 640, height: 432 },
         contents: [
@@ -694,6 +694,30 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       });
       // A Linux AppImage build also emits the .deb from the same run.
       assert.deepStrictEqual((linux.linux as Record<string, unknown>).target, ["AppImage", "deb"]);
+      // SPY releases add the .rpm for the fork's dnf repository.
+      const spyLinux = yield* createBuildConfig(
+        "linux",
+        "AppImage",
+        "1.2.3-spy.4",
+        false,
+        false,
+        undefined,
+        undefined,
+      );
+      assert.deepStrictEqual((spyLinux.linux as Record<string, unknown>).target, [
+        "AppImage",
+        "deb",
+        "rpm",
+      ]);
+      assert.includeMembers((spyLinux.rpm as { depends: string[] }).depends, [
+        "alsa-lib",
+        "libsecret",
+        "mesa-libgbm",
+      ]);
+      assert.deepStrictEqual(
+        (spyLinux.rpm as { fpm: string[] }).fpm,
+        (spyLinux.deb as { fpm: string[] }).fpm,
+      );
       // Linux must register the renderer schemes so the generated .desktop
       // entry advertises MimeType=x-scheme-handler/t3code; for OAuth deep links.
       assert.deepStrictEqual((linux.linux as Record<string, unknown>).protocols, [
