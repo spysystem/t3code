@@ -2606,6 +2606,11 @@ export function isDesktopPreviewVersion(version: string): boolean {
   return /-pr\./.test(version) || /-preview\.\d{8}\.\d+$/.test(version);
 }
 
+// SPY fork releases (`X.Y.Z-spy.N`, scripts/publish-spy-desktop.ps1).
+export function isSpyReleaseVersion(version: string): boolean {
+  return /^\d+\.\d+\.\d+-spy\.\d+$/.test(version);
+}
+
 export function resolveDesktopWebAssetBrand(version: string): WebAssetBrand {
   return resolveWebAssetBrandForChannel(resolveDesktopUpdateChannel(version));
 }
@@ -2645,8 +2650,8 @@ export function resolvePackageManagerUserAgent(packageManager: string): string {
 
 export function resolveDesktopProductName(version: string): string {
   return resolveDesktopUpdateChannel(version) === "nightly"
-    ? "T3 Code (Nightly)"
-    : (desktopPackageJson.productName ?? "T3 Code");
+    ? "T3 Code (SPY Nightly)"
+    : (desktopPackageJson.productName ?? "T3 Code (SPY)");
 }
 
 export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
@@ -2773,8 +2778,12 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       // The .deb is built from the same unpacked app after the AppImage.
       // electron-builder lists both in latest-linux.yml and writes
       // resources/package-type into the .deb only, so electron-updater updates
-      // each install in its own format.
-      target: target === "AppImage" ? [target, "deb"] : [target],
+      // each install in its own format. SPY releases also build an .rpm for
+      // the fork's dnf repository (spysystem/t3code-packages).
+      target:
+        target === "AppImage"
+          ? [target, "deb", ...(isSpyReleaseVersion(version) ? ["rpm"] : [])]
+          : [target],
       executableName: "t3code",
       icon: "icons",
       category: "Development",
@@ -2796,13 +2805,14 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
         },
       },
     };
+    // FPM runs outside the staged app directory, so source paths must be absolute.
+    // AppStream consumers associate this metadata with our t3code.desktop entry.
+    const linuxPackageFiles = [
+      `${path.join(repoRoot, "apps/desktop/resources/linux/com.t3tools.t3code.metainfo.xml")}=/usr/share/metainfo/com.t3tools.t3code.metainfo.xml`,
+      `${path.join(repoRoot, "LICENSE")}=/usr/share/doc/t3code/copyright`,
+    ];
     buildConfig.deb = {
-      // FPM runs outside the staged app directory, so source paths must be absolute.
-      // AppStream consumers associate this metadata with our t3code.desktop entry.
-      fpm: [
-        `${path.join(repoRoot, "apps/desktop/resources/linux/com.t3tools.t3code.metainfo.xml")}=/usr/share/metainfo/com.t3tools.t3code.metainfo.xml`,
-        `${path.join(repoRoot, "LICENSE")}=/usr/share/doc/t3code/copyright`,
-      ],
+      fpm: linuxPackageFiles,
       // Electron's runtime libraries. Debian 13 and Ubuntu 24.04 renamed some
       // for 64-bit time; the old name is the fallback for older releases.
       depends: [
@@ -2816,6 +2826,24 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
         "libuuid1",
         "libxss1",
         "libxtst6",
+        "xdg-utils",
+      ],
+    };
+    // electron-builder's default rpm list lacks libsecret, ALSA and GBM.
+    // Fedora names for the same libraries as the .deb list above.
+    buildConfig.rpm = {
+      fpm: linuxPackageFiles,
+      depends: [
+        "alsa-lib",
+        "at-spi2-core",
+        "gtk3",
+        "libnotify",
+        "libsecret",
+        "libuuid",
+        "libXScrnSaver",
+        "libXtst",
+        "mesa-libgbm",
+        "nss",
         "xdg-utils",
       ],
     };
