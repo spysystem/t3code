@@ -23,7 +23,8 @@ import { resolveTaggedSourceVersion } from "../../scripts/lib/tagged-source-vers
 import { thirdPartyLicensesPlugin } from "../../scripts/lib/third-party-licenses";
 import { tailwindPlugins } from "./vite/tailwind";
 import { warmBundledDevPlugin } from "./vite/warmBundledDev";
-import { formatAppDisplayName, resolveWebAppStageLabel } from "./src/branding.logic";
+import { formatAppDisplayName } from "@t3tools/shared/branding";
+import { resolveWebAppStageLabel } from "./src/branding.logic";
 
 const repoEnv = loadRepoEnv();
 Object.assign(process.env, repoEnv);
