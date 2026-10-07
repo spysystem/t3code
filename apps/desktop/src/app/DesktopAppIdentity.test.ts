@@ -217,8 +217,8 @@ describe("DesktopAppIdentity", () => {
         const identity = yield* DesktopAppIdentity.DesktopAppIdentity;
         yield* identity.configure;
 
-        assert.deepEqual(calls.setName, ["T3 Code Alpha"]);
-        assert.equal(calls.setAboutPanelOptions[0]?.applicationName, "T3 Code (Alpha)");
+        assert.deepEqual(calls.setName, ["T3 Code SPY"]);
+        assert.equal(calls.setAboutPanelOptions[0]?.applicationName, "T3 Code (SPY)");
         assert.equal(calls.setAboutPanelOptions[0]?.applicationVersion, "1.2.3");
         assert.equal(calls.setAboutPanelOptions[0]?.version, "0123456789ab");
         // Packaged: the bundle's own icon stands, so a custom one the user
@@ -238,13 +238,13 @@ describe("DesktopAppIdentity", () => {
   });
 
   it.effect.each([
-    { stage: "Alpha", environment: {} },
+    { stage: "SPY", environment: {} },
     {
-      stage: "Nightly",
+      stage: "SPY Nightly",
       environment: { appVersion: "0.0.43-nightly.20260929.2428" },
     },
     {
-      stage: "Dev",
+      stage: "SPY Dev",
       environment: { env: { VITE_DEV_SERVER_URL: "http://localhost:5173" } },
     },
   ])("uses a valid native User-Agent product name for $stage", ({ stage, environment }) => {
