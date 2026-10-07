@@ -51,3 +51,6 @@ node_modules/
 .pnpm-store/
 
 /packages/ssh/.ssh-launcher-test-*/
+
+# SPY agent skills keep task notes here
+/ai/
