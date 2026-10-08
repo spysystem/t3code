@@ -557,6 +557,9 @@ export function useSettingsRestore(onRestored?: () => void) {
     ...(settings.sidebarWorkingShelfEnabled !== DEFAULT_UNIFIED_SETTINGS.sidebarWorkingShelfEnabled
       ? [gt("Working section")]
       : []),
+    ...(settings.sidebarUsageSummaryEnabled !== DEFAULT_UNIFIED_SETTINGS.sidebarUsageSummaryEnabled
+      ? ["Usage in sidebar"]
+      : []),
     ...(settings.sidebarAutoSettleAfterDays !== DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleAfterDays
       ? [gt("Auto-settle inactive threads")]
       : []),
@@ -744,6 +747,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       sidebarProjectGroupingMode: DEFAULT_UNIFIED_SETTINGS.sidebarProjectGroupingMode,
       sidebarProjectSortOrder: DEFAULT_UNIFIED_SETTINGS.sidebarProjectSortOrder,
       sidebarWorkingShelfEnabled: DEFAULT_UNIFIED_SETTINGS.sidebarWorkingShelfEnabled,
+      sidebarUsageSummaryEnabled: DEFAULT_UNIFIED_SETTINGS.sidebarUsageSummaryEnabled,
       sidebarAutoSettleAfterDays: DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleAfterDays,
       sidebarAutoSettleKeepPullRequests: DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleKeepPullRequests,
       sidebarAutoSettleOnMerge: DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleOnMerge,
@@ -987,6 +991,34 @@ export function GeneralSettingsPanel() {
                 updateSettings({ sidebarWorkingShelfEnabled: Boolean(checked) })
               }
               aria-label={gt("Working section")}
+            />
+          }
+        />
+        <SettingsRow
+          {...setting("sidebar-usage-summary")}
+          description={gt(
+            "Show remaining subscription limits in a small box under Search in the sidebar.",
+          )}
+          resetAction={
+            settings.sidebarUsageSummaryEnabled !==
+            DEFAULT_UNIFIED_SETTINGS.sidebarUsageSummaryEnabled ? (
+              <SettingResetButton
+                ariaLabel={gt("Reset usage in sidebar to default")}
+                onClick={() =>
+                  updateSettings({
+                    sidebarUsageSummaryEnabled: DEFAULT_UNIFIED_SETTINGS.sidebarUsageSummaryEnabled,
+                  })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Switch
+              checked={settings.sidebarUsageSummaryEnabled}
+              onCheckedChange={(checked) =>
+                updateSettings({ sidebarUsageSummaryEnabled: Boolean(checked) })
+              }
+              aria-label={gt("Usage in sidebar")}
             />
           }
         />
