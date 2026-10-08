@@ -1,6 +1,7 @@
 import * as WorktreeSetupTracker from "../project/WorktreeSetupTracker.ts";
 import * as ProjectCloneTracker from "../project/ProjectCloneTracker.ts";
 import * as TerminalManager from "../terminal/Manager.ts";
+import { invokesDevSupportTicketSkill } from "@t3tools/shared/devSupportTicket";
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import {
   CommandId,
@@ -1116,6 +1117,11 @@ const make = Effect.gen(function* () {
         const initialBranch = yield* launchBranch(workspaceStrategy, project.workspaceRoot);
         const initialWorktreePath =
           workspaceStrategy.type === "existing_worktree" ? workspaceStrategy.worktreePath : null;
+        // A first message that runs the ticket investigation skill always
+        // lands in Dev support, whichever client or agent sent it.
+        const startsTicket =
+          input.initialMessage !== undefined && invokesDevSupportTicketSkill(input.initialMessage);
+        const space = startsTicket ? "support" : input.space;
         const claimDispatch =
           input.reuseExistingThread === true
             ? threads.dispatch({
@@ -1123,13 +1129,14 @@ const make = Effect.gen(function* () {
                 commandId: input.commandId,
                 threadId: candidateThreadId,
                 expectedEmpty: true,
+                ...(startsTicket ? { space: "support" as const } : {}),
               })
             : threads.dispatch({
                 type: "thread.create",
                 commandId: input.commandId,
                 threadId: candidateThreadId,
                 projectId: input.projectId,
-                ...(input.space === undefined ? {} : { space: input.space }),
+                ...(space === undefined ? {} : { space }),
                 title: input.title,
                 modelSelection: input.modelSelection,
                 runtimeMode: input.runtimeMode,
