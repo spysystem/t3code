@@ -488,6 +488,20 @@ export function threadHasUnfinishedWork(records: {
   );
 }
 
+function isSpaceOnlyMetadataUpdate(
+  command: Extract<OrchestrationV2ServerCommand, { readonly type: "thread.metadata.update" }>,
+): boolean {
+  return (
+    command.space !== undefined &&
+    command.title === undefined &&
+    command.regenerateTitle === undefined &&
+    command.branch === undefined &&
+    command.worktreePath === undefined &&
+    command.limitRecovery === undefined &&
+    command.linkedPullRequest === undefined
+  );
+}
+
 function commandThreadId(command: OrchestrationV2ServerCommand): ThreadId {
   switch (command.type) {
     case "thread.create":
@@ -2681,6 +2695,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       interactionMode: command.interactionMode,
       branch: command.branch,
       worktreePath: command.worktreePath,
+      ...(command.space === undefined ? {} : { space: command.space }),
       activeProviderThreadId: null,
       pullRequests: [],
       ...(command.linkOrigin === undefined ? {} : { linkOrigin: command.linkOrigin }),
@@ -3585,7 +3600,10 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
               : command.regenerateTitle === false || command.title !== undefined
                 ? { titleRegeneration: null }
                 : {}),
-            updatedAt: now,
+            ...(command.space === undefined ? {} : { space: command.space }),
+            // Moving between spaces is organization, not activity: a move on its
+            // own keeps updatedAt so the thread does not jump to the top of a space.
+            updatedAt: isSpaceOnlyMetadataUpdate(command) ? thread.updatedAt : now,
           };
         }
         case "thread.pull-request.link":

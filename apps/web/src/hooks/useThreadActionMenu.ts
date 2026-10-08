@@ -31,6 +31,7 @@ import {
   readEnvironmentServerConfigLoaded,
   readEnvironmentSupportsAutoSettleOptOut,
   readEnvironmentSupportsNativeThreadId,
+  readEnvironmentSupportsSpaces,
   readThreadShell,
   useProjects,
 } from "../state/entities";
@@ -48,6 +49,7 @@ import { useCopyNativeThreadId } from "./useCopyNativeThreadId";
 import { useNewThreadHandler } from "./useHandleNewThread";
 import { useClientSettings } from "./useSettings";
 import { canTurnThreadIntoProject, useThreadActions } from "./useThreadActions";
+import { otherThreadSpace, threadSpaceOf } from "../threadSpace";
 
 function failureToast(title: string, error: unknown) {
   toastManager.add(
@@ -84,6 +86,7 @@ export function useThreadActionMenu(input: {
     pinThread,
     confirmAndUnpinThread,
     setThreadAutoSettle,
+    setThreadSpace,
     archiveThread,
     deleteThread,
     markThreadUnread,
@@ -133,6 +136,7 @@ export function useThreadActionMenu(input: {
         pinning: configLoaded,
         titleRegeneration: configLoaded,
         nativeThreadId: readEnvironmentSupportsNativeThreadId(threadRef.environmentId),
+        spaces: readEnvironmentSupportsSpaces(threadRef.environmentId),
       };
       const isRegeneratingTitle = thread.titleRegeneration != null;
       const snoozePresets = resolveSnoozePresets(now, timestampFormat, threadRef.environmentId);
@@ -148,6 +152,7 @@ export function useThreadActionMenu(input: {
         canSnoozeNow: canSnooze(thread, { now: now.toISOString() }),
         isRegeneratingTitle,
         isRunning: !threadRuntimeCanArchive(thread.runtime),
+        space: threadSpaceOf(thread),
         supports,
         snoozePresets,
         canShareWithGuest,
@@ -278,6 +283,11 @@ export function useThreadActionMenu(input: {
           }
           return;
         }
+        case "move-space":
+          await reportFailure("Failed to move thread", () =>
+            setThreadSpace(threadRef, otherThreadSpace(threadSpaceOf(thread))),
+          );
+          return;
         case "copy-path": {
           const workspacePath = thread.worktreePath ?? projectCwd;
           if (!workspacePath) {
