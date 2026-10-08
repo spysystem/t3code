@@ -5,12 +5,14 @@ import { Spinner } from "~/components/ui/spinner";
 import {
   ArchiveIcon,
   ArrowUpDownIcon,
+  CheckIcon,
   ChevronRightIcon,
   FolderPlusIcon,
   Globe2Icon,
   SearchIcon,
   SquarePenIcon,
   TriangleAlertIcon,
+  Undo2Icon,
 } from "lucide-react";
 import {
   ChangeRequestStatusIcon,
@@ -89,8 +91,10 @@ import { isMacPlatform } from "../lib/utils";
 import { useSidebarPendingFileDropStore } from "../sidebarPendingFileDropStore";
 import { makeWorkspaceFileDropHandlers } from "./chat/workspaceFileDrop";
 import {
+  readEnvironmentSupportsSettlement,
   readThreadShell,
   useProjects,
+  useServerConfigs,
   useThreadShells,
   useThreadShellsForProjectRefs,
   waitForProjectRemoval,
@@ -206,6 +210,7 @@ import {
   ThreadStatusPill,
 } from "./Sidebar.logic";
 import { sortThreads } from "../lib/threadSort";
+import { sortSettledThreads } from "@t3tools/client-runtime/state/thread-sort";
 import { SidebarChromeFooter, SidebarChromeHeader } from "./sidebar/SidebarChrome";
 import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
 import { useCopyNativeThreadId } from "~/hooks/useCopyNativeThreadId";
@@ -243,6 +248,10 @@ const SIDEBAR_LIST_ANIMATION_OPTIONS = {
   easing: "ease-out",
 } as const;
 const EMPTY_THREAD_JUMP_LABELS = new Map<string, string>();
+// Settled history can grow without bound; page it in like the default sidebar.
+const SETTLED_INITIAL_COUNT = 10;
+const SETTLED_PAGE_COUNT = 25;
+const EMPTY_SETTLED_THREADS: readonly SidebarThreadSummary[] = [];
 const PROJECT_GROUPING_MODE_LABELS: Record<SidebarProjectGroupingMode, string> = {
   repository: "Group by repository",
   repository_path: "Group by repository path",
@@ -360,12 +369,25 @@ interface SidebarThreadRowProps {
   ) => Promise<void>;
   cancelRename: () => void;
   attemptArchiveThread: (threadRef: ScopedThreadRef) => Promise<void>;
+  settlementSupported: boolean;
+  isSettled: boolean;
+  attemptSettleThread: (threadRef: ScopedThreadRef) => Promise<void>;
+  attemptUnsettleThread: (threadRef: ScopedThreadRef) => Promise<void>;
   openPrLink: (
     event: React.MouseEvent<HTMLElement>,
     prUrl: string,
     threadRef?: ScopedThreadRef,
   ) => boolean;
   onFileDropThreads: (threadRef: ScopedThreadRef, files: File[]) => void;
+}
+
+// A server without settlement never has its threads shown as settled: the
+// user could not un-settle them there.
+function isLegacySidebarThreadSettled(
+  thread: SidebarThreadSummary,
+  settlementSupported: boolean,
+): boolean {
+  return settlementSupported && thread.settledOverride === "settled";
 }
 
 function checkTaskPermission(environmentId: EnvironmentId): boolean {
@@ -404,6 +426,10 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     commitRename,
     cancelRename,
     attemptArchiveThread,
+    settlementSupported,
+    isSettled,
+    attemptSettleThread,
+    attemptUnsettleThread,
     openPrLink,
     onFileDropThreads,
     thread,
@@ -498,10 +524,15 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
   const prStatus = prStatusIndicator(pr, linkedPullRequestStatus?.sourceControlProvider);
   const isConfirmingArchive =
     canOperateThread && confirmingArchiveThreadKey === threadKey && !isThreadRunning;
+  const canArchive = canOperateThread && !isThreadRunning;
+  const canSettle = canOperateThread && settlementSupported;
   const threadMetaClassName = isConfirmingArchive
     ? "pointer-events-none opacity-0"
-    : canOperateThread && !isThreadRunning
-      ? "pointer-events-none transition-opacity duration-150 max-sm:pr-6 group-hover/menu-sub-item:opacity-0 group-focus-within/menu-sub-item:opacity-0"
+    : canArchive || canSettle
+      ? cn(
+          "pointer-events-none transition-opacity duration-150 group-hover/menu-sub-item:opacity-0 group-focus-within/menu-sub-item:opacity-0",
+          canArchive && canSettle ? "max-sm:pr-12" : "max-sm:pr-6",
+        )
       : "pointer-events-none";
   const clearConfirmingArchive = () => {
     setConfirmingArchiveThreadKey((current) => (current === threadKey ? null : current));
@@ -658,6 +689,11 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     event.stopPropagation();
     void attemptArchiveThread(threadRef);
   };
+  const handleSettleToggleClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    void (isSettled ? attemptUnsettleThread(threadRef) : attemptSettleThread(threadRef));
+  };
 
   return (
     <SidebarMenuSubItem
@@ -804,26 +840,36 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
               >
                 Confirm
               </button>
-            ) : canOperateThread && !isThreadRunning ? (
-              appSettingsConfirmThreadArchive ? (
-                <div className="pointer-events-none absolute top-1/2 right-0.5 -translate-y-1/2 opacity-0 transition-opacity duration-150 max-sm:pointer-events-auto max-sm:opacity-100 group-hover/menu-sub-item:pointer-events-auto group-hover/menu-sub-item:opacity-100 group-focus-within/menu-sub-item:pointer-events-auto group-focus-within/menu-sub-item:opacity-100">
-                  <button
-                    type="button"
-                    data-thread-selection-safe
-                    data-testid={`thread-archive-${thread.id}`}
-                    aria-label={`Archive ${thread.title}`}
-                    className={SIDEBAR_ICON_ACTION_BUTTON_CLASS}
-                    onPointerDown={stopPropagationOnPointerDown}
-                    onClick={handleStartArchiveConfirmation}
-                  >
-                    <ArchiveIcon className="size-3.5" />
-                  </button>
-                </div>
-              ) : (
-                <Tooltip>
-                  <TooltipTrigger
-                    render={
-                      <div className="pointer-events-none absolute top-1/2 right-0.5 -translate-y-1/2 opacity-0 transition-opacity duration-150 max-sm:pointer-events-auto max-sm:opacity-100 group-hover/menu-sub-item:pointer-events-auto group-hover/menu-sub-item:opacity-100 group-focus-within/menu-sub-item:pointer-events-auto group-focus-within/menu-sub-item:opacity-100">
+            ) : canArchive || canSettle ? (
+              <div className="pointer-events-none absolute top-1/2 right-0.5 flex -translate-y-1/2 items-center opacity-0 transition-opacity duration-150 max-sm:pointer-events-auto max-sm:opacity-100 group-hover/menu-sub-item:pointer-events-auto group-hover/menu-sub-item:opacity-100 group-focus-within/menu-sub-item:pointer-events-auto group-focus-within/menu-sub-item:opacity-100">
+                {canSettle ? (
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <button
+                          type="button"
+                          data-thread-selection-safe
+                          data-testid={`thread-settle-${thread.id}`}
+                          aria-label={`${isSettled ? "Un-settle" : "Settle"} ${thread.title}`}
+                          className={SIDEBAR_ICON_ACTION_BUTTON_CLASS}
+                          onPointerDown={stopPropagationOnPointerDown}
+                          onClick={handleSettleToggleClick}
+                        />
+                      }
+                    >
+                      {isSettled ? (
+                        <Undo2Icon className="size-3.5" />
+                      ) : (
+                        <CheckIcon className="size-3.5" />
+                      )}
+                    </TooltipTrigger>
+                    <TooltipPopup side="top">{isSettled ? "Un-settle" : "Settle"}</TooltipPopup>
+                  </Tooltip>
+                ) : null}
+                {canArchive ? (
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
                         <button
                           type="button"
                           data-thread-selection-safe
@@ -831,16 +877,20 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
                           aria-label={`Archive ${thread.title}`}
                           className={SIDEBAR_ICON_ACTION_BUTTON_CLASS}
                           onPointerDown={stopPropagationOnPointerDown}
-                          onClick={handleArchiveImmediateClick}
-                        >
-                          <ArchiveIcon className="size-3.5" />
-                        </button>
-                      </div>
-                    }
-                  />
-                  <TooltipPopup side="top">Archive</TooltipPopup>
-                </Tooltip>
-              )
+                          onClick={
+                            appSettingsConfirmThreadArchive
+                              ? handleStartArchiveConfirmation
+                              : handleArchiveImmediateClick
+                          }
+                        />
+                      }
+                    >
+                      <ArchiveIcon className="size-3.5" />
+                    </TooltipTrigger>
+                    <TooltipPopup side="top">Archive</TooltipPopup>
+                  </Tooltip>
+                ) : null}
+              </div>
             ) : null}
             <span className={threadMetaClassName}>
               <span className="inline-flex items-center gap-1">
@@ -947,6 +997,15 @@ interface SidebarProjectThreadListProps {
   ) => boolean;
   expandThreadListForProject: (projectKey: string) => void;
   collapseThreadListForProject: (projectKey: string) => void;
+  settlementEnvironmentIds: ReadonlySet<EnvironmentId>;
+  renderedSettledThreads: readonly SidebarThreadSummary[];
+  settledThreadCount: number;
+  isSettledListExpanded: boolean;
+  hasMoreSettledThreads: boolean;
+  toggleSettledList: () => void;
+  showMoreSettledThreads: () => void;
+  attemptSettleThread: (threadRef: ScopedThreadRef) => Promise<void>;
+  attemptUnsettleThread: (threadRef: ScopedThreadRef) => Promise<void>;
 }
 
 const SidebarProjectThreadList = memo(function SidebarProjectThreadList(
@@ -988,9 +1047,58 @@ const SidebarProjectThreadList = memo(function SidebarProjectThreadList(
     openPrLink,
     expandThreadListForProject,
     collapseThreadListForProject,
+    settlementEnvironmentIds,
+    renderedSettledThreads,
+    settledThreadCount,
+    isSettledListExpanded,
+    hasMoreSettledThreads,
+    toggleSettledList,
+    showMoreSettledThreads,
+    attemptSettleThread,
+    attemptUnsettleThread,
   } = props;
   const showMoreButtonRender = <button type="button" />;
   const showLessButtonRender = <button type="button" />;
+  const settledToggleButtonRender = <button type="button" />;
+  const showMoreSettledButtonRender = <button type="button" />;
+  const renderThreadRow = (thread: SidebarThreadSummary) => {
+    const threadKey = scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id));
+    const settlementSupported = settlementEnvironmentIds.has(thread.environmentId);
+    return (
+      <SidebarThreadRow
+        key={threadKey}
+        thread={thread}
+        orderedProjectThreadKeys={orderedProjectThreadKeys}
+        isActive={activeRouteThreadKey === threadKey}
+        openPullRequestsInRightPanel={openPullRequestsInRightPanel}
+        jumpLabel={threadJumpLabelByKey.get(threadKey) ?? null}
+        appSettingsConfirmThreadArchive={appSettingsConfirmThreadArchive}
+        renamingThreadKey={renamingThreadKey}
+        renamingTitle={renamingTitle}
+        setRenamingTitle={setRenamingTitle}
+        startThreadRename={startThreadRename}
+        renamingInputRef={renamingInputRef}
+        renamingCommittedRef={renamingCommittedRef}
+        confirmingArchiveThreadKey={confirmingArchiveThreadKey}
+        setConfirmingArchiveThreadKey={setConfirmingArchiveThreadKey}
+        confirmArchiveButtonRefs={confirmArchiveButtonRefs}
+        handleThreadClick={handleThreadClick}
+        navigateToThread={navigateToThread}
+        onFileDropThreads={onFileDropThreads}
+        handleMultiSelectContextMenu={handleMultiSelectContextMenu}
+        handleThreadContextMenu={handleThreadContextMenu}
+        clearSelection={clearSelection}
+        commitRename={commitRename}
+        cancelRename={cancelRename}
+        attemptArchiveThread={attemptArchiveThread}
+        settlementSupported={settlementSupported}
+        isSettled={isLegacySidebarThreadSettled(thread, settlementSupported)}
+        attemptSettleThread={attemptSettleThread}
+        attemptUnsettleThread={attemptUnsettleThread}
+        openPrLink={openPrLink}
+      />
+    );
+  };
 
   return (
     <SidebarMenuSub
@@ -1007,40 +1115,7 @@ const SidebarProjectThreadList = memo(function SidebarProjectThreadList(
           </div>
         </SidebarMenuSubItem>
       ) : null}
-      {shouldShowThreadPanel &&
-        renderedThreads.map((thread) => {
-          const threadKey = scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id));
-          return (
-            <SidebarThreadRow
-              key={threadKey}
-              thread={thread}
-              orderedProjectThreadKeys={orderedProjectThreadKeys}
-              isActive={activeRouteThreadKey === threadKey}
-              openPullRequestsInRightPanel={openPullRequestsInRightPanel}
-              jumpLabel={threadJumpLabelByKey.get(threadKey) ?? null}
-              appSettingsConfirmThreadArchive={appSettingsConfirmThreadArchive}
-              renamingThreadKey={renamingThreadKey}
-              renamingTitle={renamingTitle}
-              setRenamingTitle={setRenamingTitle}
-              startThreadRename={startThreadRename}
-              renamingInputRef={renamingInputRef}
-              renamingCommittedRef={renamingCommittedRef}
-              confirmingArchiveThreadKey={confirmingArchiveThreadKey}
-              setConfirmingArchiveThreadKey={setConfirmingArchiveThreadKey}
-              confirmArchiveButtonRefs={confirmArchiveButtonRefs}
-              handleThreadClick={handleThreadClick}
-              navigateToThread={navigateToThread}
-              onFileDropThreads={onFileDropThreads}
-              handleMultiSelectContextMenu={handleMultiSelectContextMenu}
-              handleThreadContextMenu={handleThreadContextMenu}
-              clearSelection={clearSelection}
-              commitRename={commitRename}
-              cancelRename={cancelRename}
-              attemptArchiveThread={attemptArchiveThread}
-              openPrLink={openPrLink}
-            />
-          );
-        })}
+      {shouldShowThreadPanel && renderedThreads.map(renderThreadRow)}
 
       {projectExpanded && hasOverflowingThreads && !isThreadListExpanded && (
         <SidebarMenuSubItem className="w-full">
@@ -1073,6 +1148,40 @@ const SidebarProjectThreadList = memo(function SidebarProjectThreadList(
           </SidebarMenuSubButton>
         </SidebarMenuSubItem>
       )}
+      {projectExpanded && settledThreadCount > 0 && (
+        <SidebarMenuSubItem className="w-full">
+          <SidebarMenuSubButton
+            render={settledToggleButtonRender}
+            data-thread-selection-safe
+            data-testid={`project-settled-toggle-${projectKey}`}
+            aria-expanded={isSettledListExpanded}
+            size="sm"
+            onClick={toggleSettledList}
+          >
+            <ChevronRightIcon
+              className={cn(
+                "size-3 transition-transform duration-150",
+                isSettledListExpanded && "rotate-90",
+              )}
+            />
+            <span className="flex-1">Settled</span>
+            <span className="text-3xs tabular-nums">{settledThreadCount}</span>
+          </SidebarMenuSubButton>
+        </SidebarMenuSubItem>
+      )}
+      {renderedSettledThreads.map(renderThreadRow)}
+      {projectExpanded && isSettledListExpanded && hasMoreSettledThreads && (
+        <SidebarMenuSubItem className="w-full">
+          <SidebarMenuSubButton
+            render={showMoreSettledButtonRender}
+            data-thread-selection-safe
+            size="sm"
+            onClick={showMoreSettledThreads}
+          >
+            <span>Show more settled</span>
+          </SidebarMenuSubButton>
+        </SidebarMenuSubItem>
+      )}
     </SidebarMenuSub>
   );
 });
@@ -1085,6 +1194,8 @@ interface SidebarProjectItemProps {
   newThreadShortcutLabel: string | null;
   handleNewThread: ReturnType<typeof useNewThreadHandler>;
   archiveThread: ReturnType<typeof useThreadActions>["archiveThread"];
+  settleThread: ReturnType<typeof useThreadActions>["settleThread"];
+  unsettleThread: ReturnType<typeof useThreadActions>["unsettleThread"];
   deleteThread: ReturnType<typeof useThreadActions>["deleteThread"];
   markThreadUnread: ReturnType<typeof useThreadActions>["markThreadUnread"];
   threadJumpLabelByKey: ReadonlyMap<string, string>;
@@ -1116,7 +1227,20 @@ function resolveProjectThreadStatus(
 // Thread derivations for one project row. Built in their own hooks so they reach
 // SidebarProjectItem frozen: inline, its later calls made the compiler fuse the
 // ordered keys with the route-dependent panel, handing every row a new array.
-function useProjectThreads(project: SidebarProjectSnapshot) {
+// A hook so the set reaches each project row cached on the server configs alone.
+function useSettlementEnvironmentIds(): ReadonlySet<EnvironmentId> {
+  const serverConfigs = useServerConfigs();
+  return new Set(
+    [...serverConfigs]
+      .filter(([, config]) => config.environment.capabilities.threadSettlement === true)
+      .map(([environmentId]) => environmentId),
+  );
+}
+
+function useProjectThreads(
+  project: SidebarProjectSnapshot,
+  settlementEnvironmentIds: ReadonlySet<EnvironmentId>,
+) {
   const threadSortOrder = useClientSettings<SidebarThreadSortOrder>(
     (settings) => settings.sidebarThreadSortOrder,
   );
@@ -1168,13 +1292,22 @@ function useProjectThreads(project: SidebarProjectSnapshot) {
     filterSidebarV2VisibleThreads(sidebarThreads, null),
     threadSortOrder,
   );
+  const activeProjectThreads: SidebarThreadSummary[] = [];
+  const unsortedSettledProjectThreads: SidebarThreadSummary[] = [];
+  for (const thread of visibleProjectThreads) {
+    (isLegacySidebarThreadSettled(thread, settlementEnvironmentIds.has(thread.environmentId))
+      ? unsortedSettledProjectThreads
+      : activeProjectThreads
+    ).push(thread);
+  }
+  const settledProjectThreads = sortSettledThreads(unsortedSettledProjectThreads);
   const projectStatus = resolveProjectStatusIndicator(
-    visibleProjectThreads.map((thread) =>
+    activeProjectThreads.map((thread) =>
       resolveProjectThreadStatus(thread, lastVisitedAtByThreadKey),
     ),
   );
-  const orderedProjectThreadKeys = visibleProjectThreads.map((thread) =>
-    scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)),
+  const orderedProjectThreadKeys = [...activeProjectThreads, ...settledProjectThreads].map(
+    (thread) => scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)),
   );
   return {
     sidebarThreads,
@@ -1183,6 +1316,8 @@ function useProjectThreads(project: SidebarProjectSnapshot) {
     memberThreadCountByPhysicalKey,
     lastVisitedAtByThreadKey,
     visibleProjectThreads,
+    activeProjectThreads,
+    settledProjectThreads,
     projectStatus,
     orderedProjectThreadKeys,
   };
@@ -1190,6 +1325,9 @@ function useProjectThreads(project: SidebarProjectSnapshot) {
 
 function useProjectThreadPanel(input: {
   visibleProjectThreads: readonly SidebarThreadSummary[];
+  activeProjectThreads: readonly SidebarThreadSummary[];
+  settledProjectThreads: readonly SidebarThreadSummary[];
+  settledVisibleCount: number;
   lastVisitedAtByThreadKey: ReadonlyMap<string, string | undefined>;
   activeRouteThreadKey: string | null;
   projectExpanded: boolean;
@@ -1197,6 +1335,9 @@ function useProjectThreadPanel(input: {
 }) {
   const {
     visibleProjectThreads,
+    activeProjectThreads,
+    settledProjectThreads,
+    settledVisibleCount,
     lastVisitedAtByThreadKey,
     activeRouteThreadKey,
     projectExpanded,
@@ -1213,11 +1354,11 @@ function useProjectThreadPanel(input: {
           (thread) =>
             scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)) === activeThreadKey,
         ) ?? null);
-  const hasOverflowingThreads = visibleProjectThreads.length > sidebarThreadPreviewCount;
+  const hasOverflowingThreads = activeProjectThreads.length > sidebarThreadPreviewCount;
   const previewThreads =
     isThreadListExpanded || !hasOverflowingThreads
-      ? visibleProjectThreads
-      : visibleProjectThreads.slice(0, sidebarThreadPreviewCount);
+      ? activeProjectThreads
+      : activeProjectThreads.slice(0, sidebarThreadPreviewCount);
   const visibleThreadKeys = new Set(
     [...previewThreads, ...(pinnedCollapsedThread ? [pinnedCollapsedThread] : [])].map((thread) =>
       scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)),
@@ -1225,10 +1366,10 @@ function useProjectThreadPanel(input: {
   );
   const renderedThreads = pinnedCollapsedThread
     ? [pinnedCollapsedThread]
-    : visibleProjectThreads.filter((thread) =>
+    : activeProjectThreads.filter((thread) =>
         visibleThreadKeys.has(scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id))),
       );
-  const hiddenThreads = visibleProjectThreads.filter(
+  const hiddenThreads = activeProjectThreads.filter(
     (thread) =>
       !visibleThreadKeys.has(scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id))),
   );
@@ -1240,6 +1381,16 @@ function useProjectThreadPanel(input: {
     renderedThreads,
     showEmptyThreadState: projectExpanded && visibleProjectThreads.length === 0,
     shouldShowThreadPanel: projectExpanded || pinnedCollapsedThread !== null,
+    // The open thread stays visible even while the settled section is folded,
+    // so settling the thread you are on does not make it vanish.
+    renderedSettledThreads: projectExpanded
+      ? settledProjectThreads.filter(
+          (thread, index) =>
+            index < settledVisibleCount ||
+            scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)) ===
+              activeRouteThreadKey,
+        )
+      : EMPTY_SETTLED_THREADS,
   };
 }
 
@@ -1252,6 +1403,8 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
     newThreadShortcutLabel,
     handleNewThread,
     archiveThread,
+    settleThread,
+    unsettleThread,
     deleteThread,
     markThreadUnread,
     threadJumpLabelByKey,
@@ -1276,6 +1429,8 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
     (settings) => settings.confirmThreadArchive,
   );
   const projectGroupingSettings = useClientSettings(selectProjectGroupingSettings);
+  const settlementEnvironmentIds = useSettlementEnvironmentIds();
+  const [settledVisibleCount, setSettledVisibleCount] = useState(0);
   const deleteProject = useOrchestrationCommand(projectEnvironment.delete, {
     reportFailure: false,
   });
@@ -1346,7 +1501,9 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
     visibleProjectThreads,
     orderedProjectThreadKeys,
     lastVisitedAtByThreadKey,
-  } = useProjectThreads(project);
+    activeProjectThreads,
+    settledProjectThreads,
+  } = useProjectThreads(project, settlementEnvironmentIds);
   // The "Delete anyway" toast action runs after the toast delay, so it must see
   // the thread list as of the click, not as of the first prompt.
   const readSidebarThreadByKey = useStableCallback(() => sidebarThreadByKey);
@@ -1379,13 +1536,23 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
     renderedThreads,
     showEmptyThreadState,
     shouldShowThreadPanel,
+    renderedSettledThreads,
   } = useProjectThreadPanel({
     visibleProjectThreads,
+    activeProjectThreads,
+    settledProjectThreads,
+    settledVisibleCount,
     lastVisitedAtByThreadKey,
     activeRouteThreadKey,
     projectExpanded,
     isThreadListExpanded,
   });
+  const toggleSettledList = () => {
+    setSettledVisibleCount((count) => (count > 0 ? 0 : SETTLED_INITIAL_COUNT));
+  };
+  const showMoreSettledThreads = () => {
+    setSettledVisibleCount((count) => count + SETTLED_PAGE_COUNT);
+  };
 
   const handleProjectButtonClick = (event: React.MouseEvent<HTMLButtonElement>) => {
     if (suppressProjectClickForContextMenuRef.current) {
@@ -2007,6 +2174,34 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
       );
     }
   };
+  const attemptSettleThread = async (threadRef: ScopedThreadRef) => {
+    if (!checkTaskPermission(threadRef.environmentId)) return;
+    const result = await settleThread(threadRef);
+    if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+      const error = squashAtomCommandFailure(result);
+      toastManager.add(
+        stackedThreadToast({
+          type: "error",
+          title: "Failed to settle thread",
+          description: error instanceof Error ? error.message : "An error occurred.",
+        }),
+      );
+    }
+  };
+  const attemptUnsettleThread = async (threadRef: ScopedThreadRef) => {
+    if (!checkTaskPermission(threadRef.environmentId)) return;
+    const result = await unsettleThread(threadRef);
+    if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+      const error = squashAtomCommandFailure(result);
+      toastManager.add(
+        stackedThreadToast({
+          type: "error",
+          title: "Failed to un-settle thread",
+          description: error instanceof Error ? error.message : "An error occurred.",
+        }),
+      );
+    }
+  };
 
   const cancelRename = () => {
     setRenamingThreadKey(null);
@@ -2156,12 +2351,23 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
         thread.environmentId,
         AuthOrchestrationOperateScope,
       );
+      const settlementSupported = readEnvironmentSupportsSettlement(thread.environmentId);
+      const isSettled = isLegacySidebarThreadSettled(thread, settlementSupported);
       const clicked = await api.contextMenu.show(
         [
           ...(thread.branch
             ? [{ id: "new-thread-on-branch", label: `New thread on ${thread.branch}` }]
             : []),
           { id: "rename", label: "Rename thread", disabled: !canOperateThread },
+          ...(settlementSupported
+            ? [
+                {
+                  id: isSettled ? "unsettle" : "settle",
+                  label: isSettled ? "Un-settle thread" : "Settle thread",
+                  disabled: !canOperateThread,
+                },
+              ]
+            : []),
           { id: "mark-unread", label: "Mark unread" },
           { id: "copy-path", label: "Copy Path" },
           { id: "copy-thread-id", label: "Copy T3 thread ID" },
@@ -2213,6 +2419,15 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
 
       if (clicked === "rename") {
         startThreadRename(threadKey, thread.title);
+        return;
+      }
+
+      if (clicked === "settle") {
+        await attemptSettleThread(threadRef);
+        return;
+      }
+      if (clicked === "unsettle") {
+        await attemptUnsettleThread(threadRef);
         return;
       }
 
@@ -2409,6 +2624,15 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
         openPrLink={openPrLink}
         expandThreadListForProject={expandThreadListForProject}
         collapseThreadListForProject={collapseThreadListForProject}
+        settlementEnvironmentIds={settlementEnvironmentIds}
+        renderedSettledThreads={renderedSettledThreads}
+        settledThreadCount={settledProjectThreads.length}
+        isSettledListExpanded={settledVisibleCount > 0}
+        hasMoreSettledThreads={settledVisibleCount < settledProjectThreads.length}
+        toggleSettledList={toggleSettledList}
+        showMoreSettledThreads={showMoreSettledThreads}
+        attemptSettleThread={attemptSettleThread}
+        attemptUnsettleThread={attemptUnsettleThread}
       />
 
       <Dialog
@@ -2793,6 +3017,8 @@ interface SidebarProjectsContentProps {
   handleProjectDragCancel: (event: DragCancelEvent) => void;
   handleNewThread: ReturnType<typeof useNewThreadHandler>;
   archiveThread: ReturnType<typeof useThreadActions>["archiveThread"];
+  settleThread: ReturnType<typeof useThreadActions>["settleThread"];
+  unsettleThread: ReturnType<typeof useThreadActions>["unsettleThread"];
   deleteThread: ReturnType<typeof useThreadActions>["deleteThread"];
   markThreadUnread: ReturnType<typeof useThreadActions>["markThreadUnread"];
   sortedProjects: readonly SidebarProjectSnapshot[];
@@ -2836,6 +3062,8 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
     handleProjectDragCancel,
     handleNewThread,
     archiveThread,
+    settleThread,
+    unsettleThread,
     deleteThread,
     markThreadUnread,
     sortedProjects,
@@ -2966,6 +3194,8 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
                         newThreadShortcutLabel={newThreadShortcutLabel}
                         handleNewThread={handleNewThread}
                         archiveThread={archiveThread}
+                        settleThread={settleThread}
+                        unsettleThread={unsettleThread}
                         deleteThread={deleteThread}
                         markThreadUnread={markThreadUnread}
                         threadJumpLabelByKey={threadJumpLabelByKey}
@@ -3000,6 +3230,8 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
                 newThreadShortcutLabel={newThreadShortcutLabel}
                 handleNewThread={handleNewThread}
                 archiveThread={archiveThread}
+                settleThread={settleThread}
+                unsettleThread={unsettleThread}
                 deleteThread={deleteThread}
                 markThreadUnread={markThreadUnread}
                 threadJumpLabelByKey={threadJumpLabelByKey}
@@ -3164,6 +3396,7 @@ function useLegacySidebarThreads(input: {
     expandedThreadListsByProject,
   } = input;
   const sidebarThreads = useThreadShells();
+  const serverConfigs = useServerConfigs();
   const projectExpandedById = useUiStateStore((store) => store.projectExpandedById);
   const sidebarThreadByKey = new Map(
     sidebarThreads.map(
@@ -3214,11 +3447,19 @@ function useLegacySidebarThreads(input: {
       return [];
     }
     const isThreadListExpanded = expandedThreadListsByProject.has(project.projectKey);
-    const hasOverflowingThreads = projectThreads.length > sidebarThreadPreviewCount;
+    const activeThreads = projectThreads.filter(
+      (thread) =>
+        !isLegacySidebarThreadSettled(
+          thread,
+          serverConfigs.get(thread.environmentId)?.environment.capabilities.threadSettlement ===
+            true,
+        ),
+    );
+    const hasOverflowingThreads = activeThreads.length > sidebarThreadPreviewCount;
     const previewThreads =
       isThreadListExpanded || !hasOverflowingThreads
-        ? projectThreads
-        : projectThreads.slice(0, sidebarThreadPreviewCount);
+        ? activeThreads
+        : activeThreads.slice(0, sidebarThreadPreviewCount);
     const renderedThreads = pinnedCollapsedThread ? [pinnedCollapsedThread] : previewThreads;
     return renderedThreads.map((thread) =>
       scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)),
@@ -3258,7 +3499,8 @@ export default function LegacySidebar() {
   const sidebarProjectSortOrder = useClientSettings((s) => s.sidebarProjectSortOrder);
   const sidebarThreadPreviewCount = useClientSettings((s) => s.sidebarThreadPreviewCount);
   const handleNewThread = useNewThreadHandler();
-  const { archiveThread, deleteThread, markThreadUnread } = useThreadActions();
+  const { archiveThread, settleThread, unsettleThread, deleteThread, markThreadUnread } =
+    useThreadActions();
   const { isMobile, setOpenMobile } = useSidebar();
   const routeTarget = useThreadRouteTarget();
   const routeDraftThread = useComposerDraftStore((store) =>
@@ -3652,6 +3894,8 @@ export default function LegacySidebar() {
         handleProjectDragCancel={handleProjectDragCancel}
         handleNewThread={handleNewThread}
         archiveThread={archiveThread}
+        settleThread={settleThread}
+        unsettleThread={unsettleThread}
         deleteThread={deleteThread}
         markThreadUnread={markThreadUnread}
         sortedProjects={sortedProjects}
