@@ -102,6 +102,11 @@ stay the same. The line in each bar marks the quota expected to remain at an eve
 Your choice is remembered on this device and also applies to the composer's limits panel.
 Choose **All days** to return to pacing across the full week.
 
+On web and desktop, turn on **Settings → General → Usage in sidebar** to keep each provider's
+remaining quota in a small box under the sidebar's search. Hover a bar for its next reset, and
+click the box to open **Usage → Limits**. The box shows the last readings and never checks the
+providers itself.
+
 Pick `/usage-limits` from the composer's command menu, or send it as a message, to check the
 current model's limits without leaving the conversation. The result opens above the composer and
 closes when you dismiss it or send your next message. It uses the same snapshot as **Usage → Limits**, so it does not run the agent or refresh
