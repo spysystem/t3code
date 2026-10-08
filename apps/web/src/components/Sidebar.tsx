@@ -55,6 +55,7 @@ import {
   AuthOrchestrationOperateScope,
   EnvironmentId,
   ProjectId,
+  type OrchestrationV2ThreadSpace,
   type ScopedProjectRef,
   type ScopedThreadRef,
   type ThreadId,
@@ -232,6 +233,8 @@ import {
 import { SidebarContent, SidebarGroup, useSidebar } from "./ui/sidebar";
 import { SidebarChromeFooter, SidebarChromeHeader } from "./sidebar/SidebarChrome";
 import { SidebarUsageSummary } from "./sidebar/SidebarUsageSummary";
+import { SidebarSpaceSwitch } from "./sidebar/SidebarSpaceSwitch";
+import { otherThreadSpace, threadSpaceOf, useSidebarSpace } from "../threadSpace";
 import { SidebarHeaderIconButton, SidebarThreadHeader } from "./sidebar/SidebarThreadHeader";
 import { SidebarEnvironmentFilter } from "./sidebar/SidebarEnvironmentFilter";
 import { resolveSidebarScope } from "./Sidebar.scope";
@@ -325,6 +328,7 @@ type SidebarOptimisticDrop = {
 interface SidebarThreadPartitionInput {
   readonly threads: readonly EnvironmentThreadShell[];
   readonly scopedProjectKeys: ReadonlySet<string> | null;
+  readonly sidebarSpace: OrchestrationV2ThreadSpace;
   readonly serverConfigs: ReadonlyMap<EnvironmentId, EnvironmentServerConfig>;
   readonly optimisticDrop: SidebarOptimisticDrop | null;
   readonly workingShelfEnabled: boolean;
@@ -388,8 +392,15 @@ function useSidebarThreads(input: {
   readonly threads: readonly EnvironmentThreadShell[];
   readonly routeRowThreadKey: string | null;
 }) {
-  const { scopeKey, scopedProjectKeys, serverConfigs, optimisticDrop, threads, routeRowThreadKey } =
-    input;
+  const {
+    scopeKey,
+    scopedProjectKeys,
+    serverConfigs,
+    optimisticDrop,
+    threads,
+    routeRowThreadKey,
+  } = input;
+  const sidebarSpace = useSidebarSpace();
   const workingShelfEnabled = useClientSettings((s) => s.sidebarWorkingShelfEnabled);
   const inboxReturnsVersion = useSyncExternalStore(
     inboxReturns.subscribe,
@@ -426,6 +437,7 @@ function useSidebarThreads(input: {
   const partition = partitionSidebarThreads({
     threads,
     scopedProjectKeys,
+    sidebarSpace,
     serverConfigs,
     optimisticDrop,
     workingShelfEnabled,
@@ -529,9 +541,18 @@ function useSidebarThreads(input: {
 }
 
 function partitionSidebarThreads(input: SidebarThreadPartitionInput) {
-  const { threads, scopedProjectKeys, serverConfigs, optimisticDrop, workingShelfEnabled } = input;
+  const {
+    threads,
+    scopedProjectKeys,
+    sidebarSpace,
+    serverConfigs,
+    optimisticDrop,
+    workingShelfEnabled,
+  } = input;
   const preciseNow = new Date().toISOString();
-  const visible = filterSidebarV2VisibleThreads(threads, scopedProjectKeys);
+  const visible = filterSidebarV2VisibleThreads(threads, scopedProjectKeys).filter(
+    (thread) => threadSpaceOf(thread) === sidebarSpace,
+  );
   const inboxObservation = inboxReturns.observe(workingShelfEnabled ? threads : null);
   const pinned: EnvironmentThreadShell[] = [];
   const active: EnvironmentThreadShell[] = [];
@@ -829,6 +850,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     unpinThread,
     confirmAndUnpinThread,
     setThreadAutoSettle,
+    setThreadSpace,
     reorderPinnedThread,
     reorderActiveThread,
     markThreadUnread,
@@ -2434,6 +2456,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
               canShareWithGuest: appAtomRegistry.get(
                 canShareWithGuestAtom(threadRef.environmentId),
               ),
+              space: threadSpaceOf(thread),
               supports: {
                 settlement: supportsSettlement,
                 autoSettleOptOut: supportsAutoSettleOptOut,
@@ -2443,6 +2466,9 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                 nativeThreadId:
                   serverConfigs.get(thread.environmentId)?.environment.capabilities
                     .nativeThreadId === true,
+                spaces:
+                  serverConfigs.get(thread.environmentId)?.environment.capabilities.threadSpaces ===
+                  true,
               },
               snoozePresets,
             }),
@@ -2557,6 +2583,20 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
           case "mark-unread":
             markThreadUnread(threadRef);
             return;
+          case "move-space": {
+            const result = await setThreadSpace(threadRef, otherThreadSpace(threadSpaceOf(thread)));
+            if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+              const error = squashAtomCommandFailure(result);
+              toastManager.add(
+                stackedThreadToast({
+                  type: "error",
+                  title: "Failed to move thread",
+                  description: error instanceof Error ? error.message : "An error occurred.",
+                }),
+              );
+            }
+            return;
+          }
           case "copy-path":
             if (!threadWorkspacePath) {
               toastManager.add(
@@ -2741,6 +2781,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
         className="min-h-full"
         fixedHeader={
           <SidebarGroup className="z-[1]">
+            <SidebarSpaceSwitch />
             <SidebarThreadHeader
               searchFieldRef={headerSearchRef}
               hasProjects={projectGroups.length > 0 || showEnvironmentFilter}

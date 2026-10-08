@@ -105,6 +105,13 @@ function metadataCommand(input: {
         threadId: input.threadId,
         linkedPullRequest: null,
       };
+    case "set_space":
+      return {
+        type: "thread.metadata.update",
+        commandId: input.commandId,
+        threadId: input.threadId,
+        space: input.update.space!,
+      };
   }
 }
 
@@ -114,7 +121,7 @@ function resultFromThread(input: {
   readonly sequence: number;
   readonly thread: Pick<
     OrchestrationV2AppThread,
-    "id" | "title" | "titleRegeneration" | "linkedPullRequest" | "updatedAt"
+    "id" | "title" | "titleRegeneration" | "linkedPullRequest" | "space" | "updatedAt"
   >;
 }): ThreadMetadataMcpUpdateResult {
   return {
@@ -131,6 +138,7 @@ function resultFromThread(input: {
             startedAt: DateTime.formatIso(input.thread.titleRegeneration.startedAt),
           },
     linkedPullRequest: input.thread.linkedPullRequest ?? null,
+    space: input.thread.space ?? "development",
     updatedAt: DateTime.formatIso(input.thread.updatedAt),
   };
 }

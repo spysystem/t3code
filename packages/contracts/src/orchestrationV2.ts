@@ -398,6 +398,14 @@ const LenientThreadOpens = Schema.NullOr(OrchestrationV2ThreadOpens).pipe(
   Schema.catchDecoding(() => Effect.succeedSome(null)),
 );
 
+/**
+ * Absent means "development", so threads that predate spaces decode unchanged.
+ * Moves reuse thread.metadata.update and its event: stored events decode
+ * strictly, so a new event type would break older builds and rollbacks.
+ */
+export const OrchestrationV2ThreadSpace = Schema.Literals(["development", "support"]);
+export type OrchestrationV2ThreadSpace = typeof OrchestrationV2ThreadSpace.Type;
+
 export const OrchestrationV2AppThread = Schema.Struct({
   ...OrchestrationV2CreationFields,
   id: ThreadId,
@@ -443,6 +451,7 @@ export const OrchestrationV2AppThread = Schema.Struct({
   guestShare: Schema.optional(Schema.NullOr(ThreadGuestShare)),
   pinnedAt: Schema.optional(Schema.NullOr(Schema.DateTimeUtc)),
   autoSettleDisabledAt: Schema.optional(Schema.NullOr(Schema.DateTimeUtc)),
+  space: Schema.optional(OrchestrationV2ThreadSpace),
   pinOrderKey: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   activeOrderKey: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   lastVisitedAt: Schema.NullOr(Schema.DateTimeUtc).pipe(
@@ -469,6 +478,21 @@ export const OrchestrationV2AppThread = Schema.Struct({
   deletedAt: Schema.NullOr(Schema.DateTimeUtc),
 });
 export type OrchestrationV2AppThread = typeof OrchestrationV2AppThread.Type;
+
+/**
+ * Whether a thread.metadata-updated payload only moved the thread to another
+ * space. The orchestrator keeps updatedAt for such a move, and projections
+ * skip their activity bump so the thread keeps its place in lists.
+ */
+export function isOrchestrationV2ThreadSpaceMove(
+  previous: Pick<OrchestrationV2AppThread, "space" | "updatedAt">,
+  next: Pick<OrchestrationV2AppThread, "space" | "updatedAt">,
+): boolean {
+  return (
+    (previous.space ?? "development") !== (next.space ?? "development") &&
+    DateTime.toEpochMillis(previous.updatedAt) === DateTime.toEpochMillis(next.updatedAt)
+  );
+}
 
 /** Provider-native children cannot receive messages; T3 delegate_task children can. */
 export function isProviderNativeSubagentThread(
@@ -1986,6 +2010,8 @@ export const OrchestrationV2ThreadShell = Schema.Struct({
   limitRecovery: Schema.optional(Schema.NullOr(OrchestrationV2LimitRecovery)),
   pinnedAt: Schema.optional(Schema.NullOr(Schema.DateTimeUtc)),
   autoSettleDisabledAt: Schema.optional(Schema.NullOr(Schema.DateTimeUtc)),
+  /** Omitted by servers that predate thread spaces; absent means "development". */
+  space: Schema.optional(OrchestrationV2ThreadSpace),
   pinOrderKey: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   activeOrderKey: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   lastVisitedAt: Schema.optional(Schema.NullOr(Schema.DateTimeUtc)),
@@ -2768,6 +2794,7 @@ export const OrchestrationV2Command = Schema.Union([
     commandId: CommandId,
     threadId: ThreadId,
     projectId: ProjectId,
+    space: Schema.optional(OrchestrationV2ThreadSpace),
     title: TrimmedNonEmptyString,
     modelSelection: ModelSelection,
     runtimeMode: RuntimeMode,
@@ -2902,6 +2929,8 @@ export const OrchestrationV2Command = Schema.Union([
     limitRecovery: Schema.optional(Schema.NullOr(OrchestrationV2LimitRecoveryUpdate)),
     /** Link (object) or unlink (null) a pull request; absent leaves it unchanged. */
     linkedPullRequest: Schema.optional(Schema.NullOr(ThreadLinkedPullRequest)),
+    /** Move the thread to another space. A move on its own keeps the thread's updatedAt. */
+    space: Schema.optional(OrchestrationV2ThreadSpace),
   }),
   Schema.Struct({
     type: Schema.Literal("thread.pull-request.link"),
@@ -3396,6 +3425,7 @@ export const OrchestrationV2ThreadLaunchInput = Schema.Struct({
   threadId: Schema.optional(ThreadId),
   reuseExistingThread: Schema.optional(Schema.Boolean),
   projectId: ProjectId,
+  space: Schema.optional(OrchestrationV2ThreadSpace),
   title: TrimmedNonEmptyString,
   generateTitle: Schema.optional(Schema.Boolean),
   modelSelection: ModelSelection,

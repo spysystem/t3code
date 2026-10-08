@@ -8,6 +8,7 @@ import {
   ThreadId,
   TrimmedNonEmptyString,
 } from "./baseSchemas.ts";
+import { OrchestrationV2ThreadSpace } from "./orchestrationV2.ts";
 import { ThreadLinkedPullRequest } from "./threadPullRequest.ts";
 import { ThreadTitleRegeneration } from "./threadTitle.ts";
 
@@ -63,9 +64,10 @@ export const ThreadMetadataMcpAction = Schema.Literals([
   "regenerate_title",
   "link_pull_request",
   "unlink_pull_request",
+  "set_space",
 ]).annotate({
   description:
-    "Metadata mutation: rename, regenerate_title, link_pull_request, or unlink_pull_request.",
+    "Metadata mutation: rename, regenerate_title, link_pull_request, unlink_pull_request, or set_space.",
 });
 export type ThreadMetadataMcpAction = typeof ThreadMetadataMcpAction.Type;
 
@@ -87,9 +89,16 @@ export const ThreadMetadataMcpUpdateInput = Schema.Struct({
   pullRequest: Schema.optional(ThreadMetadataMcpPullRequest).annotate({
     description: "Pull request to link. Required only when action is link_pull_request.",
   }),
+  space: Schema.optional(OrchestrationV2ThreadSpace).annotate({
+    description:
+      'Space to move the thread to: "development" or "support" (Dev support). Required only when action is set_space. A move does not count as thread activity.',
+  }),
   clientRequestId: Schema.optional(ThreadMetadataClientRequestId),
 }).check(
   Schema.makeFilter((input) => {
+    if (input.action !== "set_space" && input.space !== undefined) {
+      return `${input.action} does not accept space.`;
+    }
     switch (input.action) {
       case "rename":
         return input.title !== undefined && input.pullRequest === undefined
@@ -99,6 +108,12 @@ export const ThreadMetadataMcpUpdateInput = Schema.Struct({
         return input.pullRequest !== undefined && input.title === undefined
           ? true
           : "link_pull_request requires pullRequest and does not accept title.";
+      case "set_space":
+        return input.space !== undefined &&
+          input.title === undefined &&
+          input.pullRequest === undefined
+          ? true
+          : "set_space requires space and does not accept title or pullRequest.";
       case "regenerate_title":
       case "unlink_pull_request":
         return input.title === undefined && input.pullRequest === undefined
@@ -117,6 +132,7 @@ export const ThreadMetadataMcpUpdateResult = Schema.Struct({
   title: Schema.String,
   titleRegeneration: Schema.NullOr(ThreadTitleRegeneration),
   linkedPullRequest: Schema.NullOr(ThreadLinkedPullRequest),
+  space: OrchestrationV2ThreadSpace,
   updatedAt: IsoDateTime,
 });
 export type ThreadMetadataMcpUpdateResult = typeof ThreadMetadataMcpUpdateResult.Type;
