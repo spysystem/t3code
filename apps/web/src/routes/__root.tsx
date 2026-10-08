@@ -19,6 +19,7 @@ import { CommandPalette } from "../components/CommandPalette";
 import { CustomSnoozeDialogHost } from "../components/CustomSnoozeDialog";
 import { GuestShareDialogHost } from "../components/chat/GuestShareControls";
 import { AddProjectToMachineDialogHost } from "../components/AddProjectToMachineDialog";
+import { DevSupportTicketDialogHost } from "../components/DevSupportTicketDialog";
 import { ConfirmDialogHost } from "../components/ConfirmDialogHost";
 import { KeybindingsConfigWarning } from "../components/KeybindingsConfigWarning";
 import { FirstRunGate } from "../components/onboarding/FirstRunGate";
@@ -196,6 +197,7 @@ function RootRouteBranch() {
         <EnvironmentThemeSync />
         <CustomSnoozeDialogHost />
         <GuestShareDialogHost />
+        <DevSupportTicketDialogHost />
         <CommandPalette>
           <AppSidebarLayout>
             <Outlet />
@@ -243,6 +245,7 @@ function RootRouteBranch() {
         <ConfirmDialogHost />
         <CustomSnoozeDialogHost />
         <GuestShareDialogHost />
+        <DevSupportTicketDialogHost />
         <SlowRpcRequestToastCoordinator />
         <ProjectCloneToastCoordinator />
         <AddProjectToMachineDialogHost />
