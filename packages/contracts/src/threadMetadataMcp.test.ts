@@ -6,6 +6,16 @@ import { ThreadMetadataMcpUpdateInput } from "./threadMetadataMcp.ts";
 const decodeUpdate = Schema.decodeUnknownSync(ThreadMetadataMcpUpdateInput);
 
 describe("ThreadMetadataMcpUpdateInput", () => {
+  it("decodes a space move and rejects invalid spaces", () => {
+    assert.deepEqual(decodeUpdate({ action: "set_space", space: "support" }), {
+      action: "set_space",
+      space: "support",
+    });
+    assert.throws(() => decodeUpdate({ action: "set_space" }));
+    assert.throws(() => decodeUpdate({ action: "set_space", space: "elsewhere" }));
+    assert.throws(() => decodeUpdate({ action: "rename", title: "Moved", space: "support" }));
+  });
+
   it("rejects malformed client request ids without normalizing valid keys", () => {
     const validKey = "metadata-\ud83d\ude80-1";
     assert.equal(
