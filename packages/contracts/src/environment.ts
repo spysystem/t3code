@@ -113,6 +113,8 @@ export const ExecutionEnvironmentCapabilities = Schema.Struct({
   threadActiveReorder: Schema.optionalKey(Schema.Boolean),
   threadAutoSettleOptOut: Schema.optionalKey(Schema.Boolean),
   threadProjectFromScratch: Schema.optionalKey(Schema.Boolean),
+  /** Server keeps `space` on threads it creates, launches, and updates through thread.metadata.update. */
+  threadSpaces: Schema.optionalKey(Schema.Boolean),
   threadTitleRegeneration: Schema.optionalKey(Schema.Boolean),
   threadVisitedTracking: Schema.optionalKey(Schema.Boolean),
   /** Supports reading the provider's native thread ID on demand. */

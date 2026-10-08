@@ -44,6 +44,7 @@ import {
   reorderPinnedThread,
   reorderActiveThread,
   setThreadAutoSettle,
+  setThreadSpace,
   settleThread,
   snoozeThread,
   startThreadTurn,
@@ -199,6 +200,12 @@ export function createThreadEnvironmentAtoms<R, E>(
     setAutoSettle: createEnvironmentCommand(runtime, {
       label: "environment-data:commands:thread:set-auto-settle",
       execute: setThreadAutoSettle,
+      scheduler,
+      concurrency,
+    }),
+    setSpace: createEnvironmentCommand(runtime, {
+      label: "environment-data:commands:thread:set-space",
+      execute: setThreadSpace,
       scheduler,
       concurrency,
     }),
@@ -419,6 +426,10 @@ export function createThreadEnvironmentAtoms<R, E>(
     setAutoSettle: optimistic.wrap(commands.setAutoSettle, (thread, input, now) => ({
       ...thread,
       autoSettleDisabledAt: input.enabled ? null : (thread.autoSettleDisabledAt ?? now),
+    })),
+    setSpace: optimistic.wrap(commands.setSpace, (thread, input) => ({
+      ...thread,
+      space: input.space,
     })),
     pin: optimistic.wrap(commands.pin, (thread, input, now) => ({
       ...thread,
