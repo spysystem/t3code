@@ -57,6 +57,7 @@ import {
   AuthOrchestrationOperateScope,
   EnvironmentId,
   ProjectId,
+  type OrchestrationV2ThreadSpace,
   type ScopedProjectRef,
   type ScopedThreadRef,
   type ThreadId,
@@ -257,6 +258,8 @@ import {
 import { SidebarContent, SidebarGroup, useSidebar } from "./ui/sidebar";
 import { SidebarChromeFooter, SidebarChromeHeader } from "./sidebar/SidebarChrome";
 import { SidebarUsageSummary } from "./sidebar/SidebarUsageSummary";
+import { SidebarSpaceSwitch } from "./sidebar/SidebarSpaceSwitch";
+import { otherThreadSpace, threadSpaceOf, useSidebarSpace } from "../threadSpace";
 import { SidebarHeaderIconButton, SidebarThreadHeader } from "./sidebar/SidebarThreadHeader";
 import { SidebarEnvironmentFilter } from "./sidebar/SidebarEnvironmentFilter";
 import { resolveSidebarScope } from "./Sidebar.scope";
@@ -361,6 +364,7 @@ interface SidebarThreadPartitionInput {
   readonly scopedProjectKeys: ReadonlySet<string> | null;
   /** Tasks linked environments run for a listed thread; they show under it. */
   readonly delegatedUnderParent: ReadonlySet<string>;
+  readonly sidebarSpace: OrchestrationV2ThreadSpace;
   readonly serverConfigs: ReadonlyMap<EnvironmentId, EnvironmentServerConfig>;
   readonly connectedEnvironmentIds: readonly EnvironmentId[];
   readonly optimisticDrop: SidebarOptimisticDrop | null;
@@ -449,6 +453,7 @@ function useSidebarThreads(input: {
     folderGroups,
     keepEmptyFolders: keepEmpty,
   } = input;
+  const sidebarSpace = useSidebarSpace();
   // Folders already separate the work, so boring mode has no Working shelf.
   const workingShelfEnabled =
     useClientSettings((s) => s.sidebarWorkingShelfEnabled) && folderGroups === null;
@@ -491,6 +496,7 @@ function useSidebarThreads(input: {
     threads,
     scopedProjectKeys,
     delegatedUnderParent,
+    sidebarSpace,
     serverConfigs,
     connectedEnvironmentIds,
     optimisticDrop,
@@ -627,13 +633,18 @@ function partitionSidebarThreads(input: SidebarThreadPartitionInput) {
     threads,
     scopedProjectKeys,
     delegatedUnderParent,
+    sidebarSpace,
     serverConfigs,
     optimisticDrop,
     workingShelfEnabled,
     sortActiveBySend,
   } = input;
   const preciseNow = new Date().toISOString();
-  const visible = filterSidebarV2VisibleThreads(threads, scopedProjectKeys, delegatedUnderParent);
+  const visible = filterSidebarV2VisibleThreads(
+    threads,
+    scopedProjectKeys,
+    delegatedUnderParent,
+  ).filter((thread) => threadSpaceOf(thread) === sidebarSpace);
   const inboxObservation = inboxReturns.observe(workingShelfEnabled ? threads : null);
   const pinned: EnvironmentThreadShell[] = [];
   const active: EnvironmentThreadShell[] = [];
@@ -952,6 +963,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
     confirmAndUnpinThread,
     setThreadAutoSettle,
     turnThreadIntoProject,
+    setThreadSpace,
     reorderPinnedThread,
     reorderActiveThread,
     markThreadUnread,
@@ -2718,6 +2730,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                 canShareWithGuestAtom(threadRef.environmentId),
               ),
               canTurnIntoProject: canTurnThreadIntoProject(threadRef),
+              space: threadSpaceOf(thread),
               supports: {
                 settlement: configLoaded,
                 autoSettleOptOut: supportsAutoSettleOptOut,
@@ -2727,6 +2740,9 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                 nativeThreadId:
                   serverConfigs.get(thread.environmentId)?.environment.capabilities
                     .nativeThreadId === true,
+                spaces:
+                  serverConfigs.get(thread.environmentId)?.environment.capabilities.threadSpaces ===
+                  true,
               },
               snoozePresets,
             }),
@@ -2859,6 +2875,20 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
           case "mark-unread":
             markThreadUnread(threadRef);
             return;
+          case "move-space": {
+            const result = await setThreadSpace(threadRef, otherThreadSpace(threadSpaceOf(thread)));
+            if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+              const error = squashAtomCommandFailure(result);
+              toastManager.add(
+                stackedThreadToast({
+                  type: "error",
+                  title: "Failed to move thread",
+                  description: error instanceof Error ? error.message : "An error occurred.",
+                }),
+              );
+            }
+            return;
+          }
           case "copy-path":
             if (!threadWorkspacePath) {
               toastManager.add(
@@ -3035,6 +3065,7 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
         className="min-h-full"
         fixedHeader={
           <SidebarGroup className="z-[1]">
+            <SidebarSpaceSwitch />
             <SidebarThreadHeader
               hasProjects={projectGroups.length > 0 || showEnvironmentFilter}
               projectScope={
