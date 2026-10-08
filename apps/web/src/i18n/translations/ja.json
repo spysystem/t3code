@@ -12987,5 +12987,9 @@
   "943f01abb699cb6e": "Accounts with known windows:",
   "06cab9963e6a8a5b": "Clear environment filter",
   "f6dd36e7cc2f9725": "Filter threads by environment",
-  "cc5d2f5ce8ee576e": "Environment"
+  "cc5d2f5ce8ee576e": "Environment",
+  "8c4903954fae9135": "Show remaining subscription limits in a small box under Search in the sidebar.",
+  "31057b4009dec210": "Reset usage in sidebar to default",
+  "42d87bf65f4f43bc": "Usage in sidebar",
+  "aac48a016a66edda": "limits quota rate subscription remaining percent box"
 }
