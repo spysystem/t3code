@@ -247,6 +247,10 @@
       "types": "./src/threadPullRequests.ts",
       "import": "./src/threadPullRequests.ts"
     },
+    "./devSupportTicket": {
+      "types": "./src/devSupportTicket.ts",
+      "import": "./src/devSupportTicket.ts"
+    },
     "./composerTrigger": {
       "types": "./src/composerTrigger.ts",
       "import": "./src/composerTrigger.ts"
