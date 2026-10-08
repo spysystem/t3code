@@ -216,6 +216,7 @@ import {
 import { sortThreads } from "../lib/threadSort";
 import { sortSettledThreads } from "@t3tools/client-runtime/state/thread-sort";
 import { SidebarChromeFooter, SidebarChromeHeader } from "./sidebar/SidebarChrome";
+import { SidebarUsageSummary } from "./sidebar/SidebarUsageSummary";
 import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
 import { useCopyNativeThreadId } from "~/hooks/useCopyNativeThreadId";
 import { readEnvironmentSupportsNativeThreadId } from "../state/entities";
@@ -3367,6 +3368,7 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
               </CommandDialogTrigger>
             </SidebarMenuItem>
           </SidebarMenu>
+          <SidebarUsageSummary />
         </SidebarGroup>
       }
     >
