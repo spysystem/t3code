@@ -287,6 +287,7 @@ import {
 } from "./ui/combobox";
 import { SidebarContent, SidebarGroup, useSidebar } from "./ui/sidebar";
 import { SidebarChromeFooter, SidebarChromeHeader } from "./sidebar/SidebarChrome";
+import { SidebarUsageSummary } from "./sidebar/SidebarUsageSummary";
 import { SidebarHeaderIconButton, SidebarThreadHeader } from "./sidebar/SidebarThreadHeader";
 import { Menu, MenuItem, MenuPopup, MenuSeparator, MenuShortcut, MenuTrigger } from "./ui/menu";
 import { SidebarEnvironmentFilter } from "./sidebar/SidebarEnvironmentFilter";
@@ -5286,6 +5287,7 @@ export default function Sidebar() {
                 </Button>
               </div>
             ) : null}
+            <SidebarUsageSummary />
           </SidebarGroup>
         }
       >
