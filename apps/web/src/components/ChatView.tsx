@@ -207,6 +207,7 @@ import {
   type TimelineScrollMode,
 } from "./chat/timelineScrollAnchoring";
 import { useUiStateStore } from "../uiStateStore";
+import { readSidebarSpace } from "../threadSpace";
 import { useWorkspaceMutationRefresh } from "../hooks/useWorkspaceMutationRefresh";
 import {
   buildPlanImplementationThreadTitle,
@@ -6708,6 +6709,8 @@ export default function ChatView(props: ChatViewProps) {
     }
 
     sendInFlightRef.current = true;
+    // Read before the uploads below: the sidebar can switch spaces while they run.
+    const threadSpaceForSend = readSidebarSpace();
     const sendGeneration = ++composerSendGenerationRef.current;
     const attachmentCapabilitiesBeforeUpload = readLiveAttachmentCapabilities();
     if (attachmentCapabilitiesBeforeUpload.fileBlockReason !== null) {
@@ -6903,6 +6906,7 @@ export default function ChatView(props: ChatViewProps) {
                     bootstrap: {
                       createThread: {
                         projectId: activeProject.id,
+                        space: threadSpaceForSend,
                         title,
                         modelSelection: target.selection,
                         runtimeMode,
@@ -7179,6 +7183,7 @@ export default function ChatView(props: ChatViewProps) {
                 ? {
                     createThread: {
                       projectId: activeProject.id,
+                      space: threadSpaceForSend,
                       title,
                       modelSelection: threadCreateModelSelection,
                       runtimeMode,
@@ -7602,6 +7607,7 @@ export default function ChatView(props: ChatViewProps) {
       input: {
         threadId: nextThreadId,
         projectId: activeProject.id,
+        ...(activeThreadShell?.space === undefined ? {} : { space: activeThreadShell.space }),
         title: nextThreadTitle,
         modelSelection: nextThreadModelSelection,
         runtimeMode: defaultRuntimeMode,

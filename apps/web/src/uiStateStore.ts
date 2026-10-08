@@ -1,5 +1,5 @@
 import { Debouncer } from "@tanstack/react-pacer";
-import type { PullRequestMergeMethod } from "@t3tools/contracts";
+import type { OrchestrationV2ThreadSpace, PullRequestMergeMethod } from "@t3tools/contracts";
 import { create } from "zustand";
 import { normalizeProjectPathForComparison } from "./lib/projectPaths";
 
@@ -28,6 +28,7 @@ export interface PersistedUiState {
   defaultAdvertisedEndpointKey?: string | null;
   sidebarProjectScopeKey?: string | null;
   sidebarEnvironmentScopeId?: string | null;
+  sidebarSpace?: string;
   threadChangedFilesExpansionVersion?: number;
   threadChangedFilesExpandedById?: Record<string, Record<string, boolean>>;
   pullRequestMergeMethod?: string;
@@ -38,6 +39,9 @@ export interface UiProjectState {
   projectOrder: string[];
   sidebarProjectScopeKey: string | null;
   sidebarEnvironmentScopeId: string | null;
+  // Which thread space the sidebar shows. Same reason to live here as the
+  // project scope; it is a per-client view choice, not thread data.
+  sidebarSpace: OrchestrationV2ThreadSpace;
 }
 
 export interface UiThreadState {
@@ -61,6 +65,7 @@ const initialState: UiState = {
   projectOrder: [],
   sidebarProjectScopeKey: null,
   sidebarEnvironmentScopeId: null,
+  sidebarSpace: "development",
   threadLastVisitedAtById: {},
   threadChangedFilesExpandedById: {},
   defaultAdvertisedEndpointKey: null,
@@ -155,6 +160,7 @@ export function parsePersistedState(parsed: PersistedUiState): UiState {
     defaultAdvertisedEndpointKey: sanitizeOptionalKey(parsed.defaultAdvertisedEndpointKey),
     sidebarProjectScopeKey: sanitizeOptionalKey(parsed.sidebarProjectScopeKey),
     sidebarEnvironmentScopeId: sanitizeOptionalKey(parsed.sidebarEnvironmentScopeId),
+    sidebarSpace: parsed.sidebarSpace === "support" ? "support" : "development",
     pullRequestMergeMethod: isPullRequestMergeMethod(parsed.pullRequestMergeMethod)
       ? parsed.pullRequestMergeMethod
       : initialState.pullRequestMergeMethod,
@@ -230,6 +236,7 @@ export function persistState(state: UiState): void {
         defaultAdvertisedEndpointKey: state.defaultAdvertisedEndpointKey,
         sidebarProjectScopeKey: state.sidebarProjectScopeKey,
         sidebarEnvironmentScopeId: state.sidebarEnvironmentScopeId,
+        sidebarSpace: state.sidebarSpace,
         threadChangedFilesExpansionVersion: THREAD_CHANGED_FILES_EXPANSION_VERSION,
         threadChangedFilesExpandedById: state.threadChangedFilesExpandedById,
         pullRequestMergeMethod: state.pullRequestMergeMethod,
@@ -442,6 +449,7 @@ interface UiStateStore extends UiState {
   setDefaultAdvertisedEndpointKey: (key: string | null) => void;
   setSidebarProjectScopeKey: (projectKey: string | null) => void;
   setSidebarEnvironmentScope: (environmentId: string | null, projectKey: string | null) => void;
+  setSidebarSpace: (space: OrchestrationV2ThreadSpace) => void;
   setPullRequestMergeMethod: (method: PullRequestMergeMethod) => void;
   setProjectExpanded: (projectIds: string | readonly string[], expanded: boolean) => void;
   reorderProjects: (
@@ -465,6 +473,8 @@ export const useUiStateStore = create<UiStateStore>((set) => ({
     set((state) => setSidebarProjectScopeKey(state, projectKey)),
   setSidebarEnvironmentScope: (environmentId, projectKey) =>
     set((state) => setSidebarEnvironmentScope(state, environmentId, projectKey)),
+  setSidebarSpace: (space) =>
+    set((state) => (state.sidebarSpace === space ? state : { ...state, sidebarSpace: space })),
   setPullRequestMergeMethod: (method) => set((state) => setPullRequestMergeMethod(state, method)),
   setProjectExpanded: (projectIds, expanded) =>
     set((state) => setProjectExpanded(state, projectIds, expanded)),

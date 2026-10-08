@@ -316,6 +316,13 @@ export function readEnvironmentSupportsSettlement(environmentId: EnvironmentId):
   );
 }
 
+/** Whether the environment's server stores thread spaces. */
+export function readEnvironmentSupportsSpaces(environmentId: EnvironmentId): boolean {
+  return (
+    appAtomRegistry.get(environmentServerConfigsAtom).get(environmentId)?.environment.capabilities
+      .threadSpaces === true
+  );
+}
 export function readEnvironmentSupportsSnooze(environmentId: EnvironmentId): boolean {
   return (
     appAtomRegistry.get(environmentServerConfigsAtom).get(environmentId)?.environment.capabilities
