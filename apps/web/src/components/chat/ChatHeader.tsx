@@ -9,7 +9,7 @@ import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
-import { ChevronDownIcon } from "lucide-react";
+import { ChevronDownIcon, TicketIcon } from "lucide-react";
 import {
   memo,
   useCallback,
@@ -24,7 +24,11 @@ import { isTrailingDoubleClick } from "../Sidebar.logic";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { toastManager } from "../ui/toast";
 import { useThreadActionMenu } from "~/hooks/useThreadActionMenu";
-import { readLocalApi } from "~/localApi";
+import { ensureLocalApi, readLocalApi } from "~/localApi";
+import { useThreadShell } from "../../state/entities";
+import { supportTaskIdOf } from "../../threadSpace";
+import { devSupportTaskUrl } from "../devSupportTicket.logic";
+import { SupportTicketMenu } from "./SupportTicketMenu";
 import { threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { useOrchestrationCommand } from "../../state/use-orchestration-command";
@@ -48,6 +52,8 @@ interface ChatHeaderProps {
   rightPanelOpen: boolean;
   onNewThreadInProject: () => void;
   onOpenProjectSettings?: (() => void) | undefined;
+  /** The agent's latest reply for the supporter, for support threads' Copy reply. */
+  readSupporterReply: () => string | null;
 }
 
 /**
@@ -80,6 +86,7 @@ export const ChatHeader = memo(function ChatHeader({
   rightPanelOpen,
   onNewThreadInProject,
   onOpenProjectSettings,
+  readSupporterReply,
 }: ChatHeaderProps) {
   const activeProjectName = activeProject?.title;
   const activeProjectCwd = activeProject?.workspaceRoot ?? null;
@@ -91,6 +98,8 @@ export const ChatHeader = memo(function ChatHeader({
     activeThreadEnvironmentId,
     AuthOrchestrationOperateScope,
   );
+  const activeThreadShell = useThreadShell(isServerThread ? activeThreadRef : null);
+  const supportTaskId = activeThreadShell ? supportTaskIdOf(activeThreadShell) : null;
   const updateThreadMetadata = useOrchestrationCommand(threadEnvironment.updateMetadata, {
     reportFailure: false,
   });
@@ -354,6 +363,37 @@ export const ChatHeader = memo(function ChatHeader({
             </Tooltip>
           )}
         </WorkspaceBreadcrumbItem>
+        {supportTaskId !== null ? (
+          <WorkspaceBreadcrumbItem className="shrink-0">
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <button
+                    type="button"
+                    aria-label={`Open ticket #${supportTaskId} in Admin`}
+                    onClick={() =>
+                      void ensureLocalApi().shell.openExternal(devSupportTaskUrl(supportTaskId))
+                    }
+                    className="inline-flex cursor-pointer items-center gap-1 rounded-sm text-muted-foreground tabular-nums transition-colors hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+                  />
+                }
+              >
+                <TicketIcon aria-hidden className="size-3.5" />
+                <WorkspaceBreadcrumbText>#{supportTaskId}</WorkspaceBreadcrumbText>
+              </TooltipTrigger>
+              <TooltipPopup side="top">Open ticket in Admin</TooltipPopup>
+            </Tooltip>
+          </WorkspaceBreadcrumbItem>
+        ) : null}
+        {supportTaskId !== null && activeThreadShell ? (
+          <WorkspaceBreadcrumbItem className="shrink-0">
+            <SupportTicketMenu
+              thread={activeThreadShell}
+              taskId={supportTaskId}
+              readSupporterReply={readSupporterReply}
+            />
+          </WorkspaceBreadcrumbItem>
+        ) : null}
       </WorkspaceBreadcrumb>
     </div>
   );

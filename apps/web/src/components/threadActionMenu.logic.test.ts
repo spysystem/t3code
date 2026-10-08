@@ -17,12 +17,15 @@ const baseState: ThreadActionMenuState = {
   canSnoozeNow: true,
   isRegeneratingTitle: false,
   isRunning: false,
+  space: "development",
+  supportTaskId: null,
   supports: {
     settlement: true,
     autoSettleOptOut: true,
     snooze: true,
     pinning: true,
     titleRegeneration: true,
+    spaces: false,
   },
   snoozePresets: [
     { id: "hour", label: "In 1 hour", whenLabel: "3:00 PM", snoozedUntil: "2026-08-07T15:00:00Z" },
@@ -111,9 +114,22 @@ describe("buildThreadActionMenuItems", () => {
           snooze: false,
           pinning: false,
           titleRegeneration: false,
+          spaces: false,
         },
       }),
     ).toEqual(["rename", "mark-unread", "copy", "project-settings", "archive", "delete"]);
+  });
+
+  it("offers the move to the other space only where the server supports spaces", () => {
+    const label = (space: "development" | "support") =>
+      buildThreadActionMenuItems({
+        ...baseState,
+        space,
+        supports: { ...baseState.supports, spaces: true },
+      }).find((item) => item.id === "move-space")?.label;
+    expect(label("development")).toBe("Move to Dev support");
+    expect(label("support")).toBe("Move to Development");
+    expect(ids(baseState)).not.toContain("move-space");
   });
 
   it("groups project settings with utility actions before archive", () => {
@@ -221,6 +237,7 @@ describe("buildThreadActionMenuItems", () => {
           snooze: false,
           pinning: false,
           titleRegeneration: false,
+          spaces: false,
         },
       }),
     ).toContain("archive");

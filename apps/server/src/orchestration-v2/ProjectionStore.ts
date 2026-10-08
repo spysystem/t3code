@@ -674,9 +674,11 @@ export function applyToProjection(
         thread: event.payload,
       };
     // Visited tracking is read state, not activity: skip the updatedAt bump so
-    // viewing a thread does not surface it as recently active.
+    // viewing a thread does not surface it as recently active. Moving a thread
+    // between spaces is organization and skips it for the same reason.
     case "thread.visited":
     case "thread.marked-unread":
+    case "thread.space-set":
       return {
         ...projection,
         thread: event.payload,
@@ -1469,6 +1471,7 @@ export function threadShellFromProjection(
     pinnedAt: projection.thread.pinnedAt ?? null,
 
     autoSettleDisabledAt: projection.thread.autoSettleDisabledAt ?? null,
+    ...(projection.thread.space === undefined ? {} : { space: projection.thread.space }),
     pinOrderKey: projection.thread.pinOrderKey ?? null,
     lastVisitedAt: projection.thread.lastVisitedAt,
     titleRegeneration: projection.thread.titleRegeneration ?? null,
@@ -1724,6 +1727,7 @@ function shellFromState(input: {
     pinnedAt: input.state.thread.pinnedAt ?? null,
 
     autoSettleDisabledAt: input.state.thread.autoSettleDisabledAt ?? null,
+    ...(input.state.thread.space === undefined ? {} : { space: input.state.thread.space }),
     pinOrderKey: input.state.thread.pinOrderKey ?? null,
     lastVisitedAt: input.state.thread.lastVisitedAt,
     titleRegeneration: input.state.thread.titleRegeneration ?? null,
@@ -1769,6 +1773,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
           case "thread.active-reordered":
           case "thread.visited":
           case "thread.marked-unread":
+          case "thread.space-set":
           case "thread.metadata-updated":
           case "thread.pull-request-synced":
           case "thread.runtime-mode-updated":
@@ -2600,6 +2605,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
           event.type !== "thread.pin-reordered" &&
           event.type !== "thread.visited" &&
           event.type !== "thread.marked-unread" &&
+          event.type !== "thread.space-set" &&
           event.type !== "thread.metadata-updated" &&
           event.type !== "thread.runtime-mode-updated" &&
           event.type !== "thread.interaction-mode-updated" &&

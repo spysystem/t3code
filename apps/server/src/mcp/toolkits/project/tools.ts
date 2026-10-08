@@ -7,6 +7,7 @@ import {
   RunId,
   OrchestrationV2RunStatus,
   OrchestrationV2ThreadLaunchWorkspaceStrategy,
+  OrchestrationV2ThreadSpace,
   RuntimeMode,
   ProviderInteractionMode,
   Project,
@@ -113,6 +114,12 @@ const ThreadLaunchTool = Tool.make("t3_thread_launch", {
       }),
     ),
     title: TrimmedNonEmptyString,
+    space: Schema.optional(
+      OrchestrationV2ThreadSpace.annotate({
+        description:
+          'Sidebar view for the new thread: "development" or "support" (Dev support). Omit to use the calling thread\'s view.',
+      }),
+    ),
     modelSelection: Schema.optional(ModelSelection),
     runtimeMode: Schema.optional(RuntimeMode),
     interactionMode: Schema.optional(ProviderInteractionMode),
