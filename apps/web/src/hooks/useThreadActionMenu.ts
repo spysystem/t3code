@@ -50,8 +50,7 @@ import { useCopyNativeThreadId } from "./useCopyNativeThreadId";
 import { useNewThreadHandler } from "./useHandleNewThread";
 import { useClientSettings } from "./useSettings";
 import { useThreadActions } from "./useThreadActions";
-import { otherThreadSpace, supportTaskIdOf, threadSpaceOf } from "../threadSpace";
-import { devSupportTaskUrl } from "../components/devSupportTicket.logic";
+import { otherThreadSpace, threadSpaceOf } from "../threadSpace";
 
 function failureToast(title: string, error: unknown) {
   toastManager.add(
@@ -168,7 +167,6 @@ export function useThreadActionMenu(input: {
           isRegeneratingTitle,
           isRunning: !threadRuntimeCanArchive(thread.runtime),
           space: threadSpaceOf(thread),
-          supportTaskId: supportTaskIdOf(thread),
           supports,
           snoozePresets,
         });
@@ -276,11 +274,6 @@ export function useThreadActionMenu(input: {
           case "mark-unread":
             markThreadUnread(threadRef);
             return;
-          case "open-ticket": {
-            const taskId = supportTaskIdOf(thread);
-            if (taskId !== null) void api.shell.openExternal(devSupportTaskUrl(taskId));
-            return;
-          }
           case "move-space":
             await reportFailure("Failed to move thread", () =>
               setThreadSpace(threadRef, otherThreadSpace(threadSpaceOf(thread))),

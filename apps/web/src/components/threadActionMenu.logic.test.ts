@@ -18,7 +18,6 @@ const baseState: ThreadActionMenuState = {
   isRegeneratingTitle: false,
   isRunning: false,
   space: "development",
-  supportTaskId: null,
   supports: {
     settlement: true,
     autoSettleOptOut: true,

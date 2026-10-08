@@ -24,7 +24,6 @@ export type ThreadActionMenuId =
   | "regenerate-title"
   | "mark-unread"
   | "move-space"
-  | "open-ticket"
   | "copy"
   | "copy-path"
   | "copy-branch"
@@ -94,8 +93,6 @@ export interface ThreadActionMenuState {
   /** Archive rejects a thread with an attached provider, so disable it here rather than let the action fail. */
   readonly isRunning: boolean;
   readonly space: OrchestrationV2ThreadSpace;
-  /** The dev-support ticket the thread is about, if any. */
-  readonly supportTaskId: string | null;
   readonly supports: {
     readonly settlement: boolean;
     /** Server understands thread.auto-settle.set. */
@@ -115,7 +112,6 @@ export function threadActionRequiresOperate(action: ThreadActionMenuId): boolean
   return ![
     "new-thread-on-branch",
     "project-settings",
-    "open-ticket",
     "mark-unread",
     "copy",
     "copy-path",
@@ -133,15 +129,6 @@ export function buildThreadActionMenuItems(
   state: ThreadActionMenuState,
 ): ReadonlyArray<ContextMenuItem<ThreadActionMenuId>> {
   const items: ReadonlyArray<ContextMenuItem<ThreadActionMenuId>> = [
-    ...(state.supportTaskId !== null
-      ? [
-          {
-            id: "open-ticket" as const,
-            label: `Open ticket #${state.supportTaskId} in Admin`,
-            icon: "external-link",
-          },
-        ]
-      : []),
     ...(state.branch
       ? [
           {

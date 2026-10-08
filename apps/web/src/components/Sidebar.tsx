@@ -280,8 +280,7 @@ import { SidebarContent, SidebarGroup, useSidebar } from "./ui/sidebar";
 import { SidebarChromeFooter, SidebarChromeHeader } from "./sidebar/SidebarChrome";
 import { SidebarUsageSummary } from "./sidebar/SidebarUsageSummary";
 import { SidebarSpaceSwitch } from "./sidebar/SidebarSpaceSwitch";
-import { otherThreadSpace, supportTaskIdOf, threadSpaceOf, useSidebarSpace } from "../threadSpace";
-import { devSupportTaskUrl } from "./devSupportTicket.logic";
+import { otherThreadSpace, threadSpaceOf, useSidebarSpace } from "../threadSpace";
 import { SidebarHeaderIconButton, SidebarThreadHeader } from "./sidebar/SidebarThreadHeader";
 import { Menu, MenuItem, MenuPopup, MenuSeparator, MenuShortcut, MenuTrigger } from "./ui/menu";
 import { SidebarEnvironmentFilter } from "./sidebar/SidebarEnvironmentFilter";
@@ -4660,7 +4659,6 @@ export default function Sidebar() {
               isRegeneratingTitle,
               isRunning: !threadRuntimeCanArchive(thread.runtime),
               space: threadSpaceOf(thread),
-              supportTaskId: supportTaskIdOf(thread),
               supports: {
                 settlement: supportsSettlement,
                 autoSettleOptOut: supportsAutoSettleOptOut,
@@ -4784,11 +4782,6 @@ export default function Sidebar() {
           case "mark-unread":
             markThreadUnread(threadRef);
             return;
-          case "open-ticket": {
-            const taskId = supportTaskIdOf(thread);
-            if (taskId !== null) void api.shell.openExternal(devSupportTaskUrl(taskId));
-            return;
-          }
           case "move-space": {
             const result = await setThreadSpace(threadRef, otherThreadSpace(threadSpaceOf(thread)));
             if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {

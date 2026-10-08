@@ -219,8 +219,7 @@ import { sortSettledThreads } from "@t3tools/client-runtime/state/thread-sort";
 import { SidebarChromeFooter, SidebarChromeHeader } from "./sidebar/SidebarChrome";
 import { SidebarUsageSummary } from "./sidebar/SidebarUsageSummary";
 import { SidebarSpaceSwitch } from "./sidebar/SidebarSpaceSwitch";
-import { otherThreadSpace, supportTaskIdOf, threadSpaceOf, useSidebarSpace } from "../threadSpace";
-import { devSupportTaskUrl } from "./devSupportTicket.logic";
+import { otherThreadSpace, threadSpaceOf, useSidebarSpace } from "../threadSpace";
 import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
 import { useCopyNativeThreadId } from "~/hooks/useCopyNativeThreadId";
 import { readEnvironmentSupportsNativeThreadId } from "../state/entities";
@@ -2579,12 +2578,8 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
       const settlementSupported = readEnvironmentSupportsSettlement(thread.environmentId);
       const isSettled = isLegacySidebarThreadSettled(thread, settlementSupported);
       const space = threadSpaceOf(thread);
-      const supportTaskId = supportTaskIdOf(thread);
       const clicked = await api.contextMenu.show(
         [
-          ...(supportTaskId !== null
-            ? [{ id: "open-ticket", label: `Open ticket #${supportTaskId} in Admin` }]
-            : []),
           ...(thread.branch
             ? [{ id: "new-thread-on-branch", label: `New thread on ${thread.branch}` }]
             : []),
@@ -2669,10 +2664,6 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
       }
       if (clicked === "unsettle") {
         await attemptUnsettleThread(threadRef);
-        return;
-      }
-      if (clicked === "open-ticket") {
-        if (supportTaskId !== null) void api.shell.openExternal(devSupportTaskUrl(supportTaskId));
         return;
       }
       if (clicked === "move-space") {

@@ -4,12 +4,13 @@ import {
   type ThreadId,
 } from "@t3tools/contracts";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
+import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
-import { ChevronDownIcon, TicketIcon } from "lucide-react";
+import { ChevronDownIcon } from "lucide-react";
 import {
   memo,
   useCallback,
@@ -24,10 +25,10 @@ import { isTrailingDoubleClick } from "../Sidebar.logic";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { toastManager } from "../ui/toast";
 import { useThreadActionMenu } from "~/hooks/useThreadActionMenu";
-import { ensureLocalApi, readLocalApi } from "~/localApi";
+import { readLocalApi } from "~/localApi";
 import { useThreadShell } from "../../state/entities";
 import { supportTaskIdOf } from "../../threadSpace";
-import { devSupportTaskUrl } from "../devSupportTicket.logic";
+import { ThreadLink, useThreadLink } from "../ThreadLink";
 import { SupportTicketMenu } from "./SupportTicketMenu";
 import { threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -54,6 +55,16 @@ interface ChatHeaderProps {
   onOpenProjectSettings?: (() => void) | undefined;
   /** The agent's latest reply for the supporter, for support threads' Copy reply. */
   readSupporterReply: () => string | null;
+}
+
+// An empty breadcrumb item would still take a flex gap, so render only on a match.
+function HeaderThreadLink({ thread }: { readonly thread: EnvironmentThreadShell }) {
+  if (useThreadLink(thread) === null) return null;
+  return (
+    <WorkspaceBreadcrumbItem className="shrink-0">
+      <ThreadLink thread={thread} />
+    </WorkspaceBreadcrumbItem>
+  );
 }
 
 /**
@@ -363,28 +374,7 @@ export const ChatHeader = memo(function ChatHeader({
             </Tooltip>
           )}
         </WorkspaceBreadcrumbItem>
-        {supportTaskId !== null ? (
-          <WorkspaceBreadcrumbItem className="shrink-0">
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <button
-                    type="button"
-                    aria-label={`Open ticket #${supportTaskId} in Admin`}
-                    onClick={() =>
-                      void ensureLocalApi().shell.openExternal(devSupportTaskUrl(supportTaskId))
-                    }
-                    className="inline-flex cursor-pointer items-center gap-1 rounded-sm text-muted-foreground tabular-nums transition-colors hover:text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
-                  />
-                }
-              >
-                <TicketIcon aria-hidden className="size-3.5" />
-                <WorkspaceBreadcrumbText>#{supportTaskId}</WorkspaceBreadcrumbText>
-              </TooltipTrigger>
-              <TooltipPopup side="top">Open ticket in Admin</TooltipPopup>
-            </Tooltip>
-          </WorkspaceBreadcrumbItem>
-        ) : null}
+        {activeThreadShell ? <HeaderThreadLink thread={activeThreadShell} /> : null}
         {supportTaskId !== null && activeThreadShell ? (
           <WorkspaceBreadcrumbItem className="shrink-0">
             <SupportTicketMenu

@@ -56,10 +56,6 @@ export function devSupportFollowUpPrompt(followUp: DevSupportFollowUp, taskId: s
   }
 }
 
-export function devSupportTaskUrl(taskId: string): string {
-  return `https://admin.spysystem.dk/?controller=Task%5CView&action=ViewTask&iTaskID=${taskId}`;
-}
-
 /** Accepts `12345` or `#12345`; anything else is not a task ID. */
 export function parseDevSupportTaskId(input: string): string | null {
   const match = /^#?(\d+)$/u.exec(input.trim());
