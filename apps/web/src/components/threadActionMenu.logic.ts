@@ -1,4 +1,4 @@
-import type { ContextMenuItem } from "@t3tools/contracts";
+import type { ContextMenuItem, OrchestrationV2ThreadSpace } from "@t3tools/contracts";
 import type { SnoozePreset } from "@t3tools/client-runtime/state/thread-settled";
 
 export type ThreadActionMenuId =
@@ -21,6 +21,7 @@ export type ThreadActionMenuId =
   | "regenerate-title"
   | "mark-unread"
   | "share-guest"
+  | "move-space"
   | "copy"
   | "copy-path"
   | "copy-branch"
@@ -84,6 +85,7 @@ export interface ThreadActionMenuState {
   readonly isRegeneratingTitle: boolean;
   /** Archive rejects attached providers, so disable it while running. */
   readonly isRunning: boolean;
+  readonly space: OrchestrationV2ThreadSpace;
   readonly supports: {
     readonly settlement: boolean;
     readonly autoSettleOptOut: boolean;
@@ -91,6 +93,8 @@ export interface ThreadActionMenuState {
     readonly pinning: boolean;
     readonly titleRegeneration: boolean;
     readonly nativeThreadId?: boolean;
+    /** Server stores thread spaces. */
+    readonly spaces: boolean;
   };
   readonly snoozePresets: ReadonlyArray<SnoozePreset>;
   /** Guest links need their own grant, so the caller checks it instead of `canOperate`. */
@@ -182,6 +186,15 @@ export function buildThreadActionMenuItems(
     { id: "mark-unread", label: "Mark unread", icon: "mail-open" },
     ...(state.canShareWithGuest
       ? [{ id: "share-guest" as const, label: "Share with guest", icon: "user-plus" }]
+      : []),
+    ...(state.supports.spaces
+      ? [
+          {
+            id: "move-space" as const,
+            label: state.space === "support" ? "Move to Development" : "Move to Dev support",
+            icon: "arrow-right-left",
+          },
+        ]
       : []),
     ...(state.projectFilter
       ? [
