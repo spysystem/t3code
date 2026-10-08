@@ -134,6 +134,10 @@ sending an answer or restarting the agent. Settling also closes the thread's
 terminals that wait at an idle prompt, and keeps their output. A terminal that
 runs a command, such as a dev server, stays open.
 
+With **Sidebar (legacy)** turned on in **Settings → General → Legacy features**, hover a
+thread and press its check button to settle it. Settled threads collect in a folded
+**Settled** section at the bottom of their project.
+
 To reclaim disk space from settled work, turn on **Run in the thread's worktree when the
 thread settles** for one of the project's actions, or set `"runOnSettle": true` on a
 `t3.json` script, for example `cargo clean`. It runs each time a thread in its own
