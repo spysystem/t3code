@@ -43,6 +43,24 @@ in a new thread's model picker to add or remove them. A regular click returns to
 single model. Choose a base branch and send. Each selection starts a separate thread
 and worktree while you stay in the new thread composer. This requires a Git project.
 
+## Keep support work apart
+
+On web and desktop, the switch at the top of the sidebar shows one space at a time:
+**Development** or **Dev support**. The command palette's **Switch to** action flips it
+too. Each thread belongs to one. A badge on the hidden space counts its threads that
+wait on you: an approval, a question, a ready plan, or a finished turn you have not
+opened. Settled and snoozed threads do not count.
+
+A thread you start lands in the space the sidebar shows. A thread started from another
+thread, such as a fork, an implemented plan, or a thread an agent launches, keeps that
+thread's space. Threads started from mobile or by scheduled tasks land in Development.
+To move a thread, choose **Move to Dev support** or **Move to Development** from its
+menu; it keeps its place in the list. Opening a thread from the other space, for
+example from a notification, switches the sidebar to that space.
+
+The switch appears once a connected environment supports spaces. Mobile lists threads
+from both spaces together.
+
 ## Pin and reorder threads
 
 Pin a thread from its menu to keep it above your active work.

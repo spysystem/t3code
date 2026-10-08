@@ -35,12 +35,19 @@ describe("ThreadMetadataMcpUpdateInput", () => {
     assert.deepEqual(decodeUpdate({ action: "unlink_pull_request" }), {
       action: "unlink_pull_request",
     });
+    assert.deepEqual(decodeUpdate({ action: "set_space", space: "support" }), {
+      action: "set_space",
+      space: "support",
+    });
   });
 
   it("rejects missing action data and fields from another action", () => {
     assert.throws(() => decodeUpdate({ action: "rename" }));
     assert.throws(() => decodeUpdate({ action: "regenerate_title", title: "Not allowed" }));
     assert.throws(() => decodeUpdate({ action: "link_pull_request" }));
+    assert.throws(() => decodeUpdate({ action: "set_space" }));
+    assert.throws(() => decodeUpdate({ action: "rename", title: "Moved", space: "support" }));
+    assert.throws(() => decodeUpdate({ action: "set_space", space: "elsewhere" }));
     assert.throws(() =>
       decodeUpdate({
         action: "unlink_pull_request",

@@ -10,6 +10,7 @@ import {
   type OrchestrationV2Actor,
   type OrchestrationV2CreationSource,
   type OrchestrationV2ProviderThreadNativeMetadata,
+  type OrchestrationV2ThreadSpace,
   type OrchestrationV2ThreadProjection,
   type ProviderDriverKind,
   type ProviderInteractionMode,
@@ -77,6 +78,7 @@ export interface ThreadLaunchInput {
   readonly threadId?: ThreadId;
   readonly reuseExistingThread?: boolean;
   readonly projectId: ProjectId;
+  readonly space?: OrchestrationV2ThreadSpace;
   readonly title: string;
   readonly generateTitle?: boolean;
   readonly modelSelection: ModelSelection;
@@ -837,6 +839,7 @@ const make = Effect.gen(function* () {
                 commandId: input.commandId,
                 threadId: candidateThreadId,
                 projectId: input.projectId,
+                ...(input.space === undefined ? {} : { space: input.space }),
                 title: input.title,
                 modelSelection: input.modelSelection,
                 runtimeMode: input.runtimeMode,

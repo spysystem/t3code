@@ -3,6 +3,7 @@ import type {
   OrchestrationV2ThreadProjection,
   OrchestrationV2TurnItem,
 } from "@t3tools/contracts";
+import { isOrchestrationV2ThreadSpaceMove } from "@t3tools/contracts";
 import {
   createOrchestrationV2TurnItemVisibility,
   isOrchestrationV2TurnItemVisible,
@@ -174,13 +175,18 @@ export function applyOrchestrationV2ProjectionEvent(
     case "thread.unpinned":
     case "thread.pin-reordered":
     case "thread.active-reordered":
-    case "thread.metadata-updated":
     case "thread.pull-request-synced":
     case "thread.runtime-mode-updated":
     case "thread.interaction-mode-updated":
     case "thread.model-selection-updated":
     case "thread.provider-switched":
       return { ...base, thread: event.payload };
+    // A move between spaces keeps the thread's place, like a visit.
+    case "thread.metadata-updated":
+      return {
+        ...(isOrchestrationV2ThreadSpaceMove(projection.thread, event.payload) ? projection : base),
+        thread: event.payload,
+      };
     // Visited tracking is read state, not activity: skip the updatedAt bump.
     case "thread.visited":
     case "thread.marked-unread":

@@ -48,6 +48,7 @@ import { useLocation, useNavigate, useParams } from "@tanstack/react-router";
 import * as Option from "effect/Option";
 import {
   ArrowLeftIcon,
+  ArrowRightLeftIcon,
   ChartNoAxesColumnIcon,
   CheckIcon,
   ChevronRightIcon,
@@ -226,6 +227,7 @@ import { ComposerHandleContext, useComposerHandleContext } from "../composerHand
 import type { ChatComposerHandle } from "./chat/ChatComposer";
 import { getProjectOrderKey, selectProjectGroupingSettings } from "../logicalProject";
 import { legacyProjectCwdPreferenceKey, useUiStateStore } from "../uiStateStore";
+import { otherThreadSpace, THREAD_SPACE_LABELS } from "../threadSpace";
 import {
   buildSidebarProjectPickerEntries,
   buildSidebarProjectSnapshots,
@@ -774,7 +776,8 @@ function OpenCommandPaletteDialog(props: {
         ? scopeThreadRef(activeThread.environmentId, activeThread.id)
         : null;
   const openPanelPullRequestUrl = useOpenPanelPullRequestUrl(referenceThreadRef);
-  const activeThreadServerConfig = useServerConfigs().get(
+  const serverConfigs = useServerConfigs();
+  const activeThreadServerConfig = serverConfigs.get(
     activeThread?.environmentId ?? ("" as EnvironmentId),
   );
   const activeThreadReferenceCopyTarget =
@@ -810,6 +813,8 @@ function OpenCommandPaletteDialog(props: {
     }
   }, [activeThreadReferenceCopyTarget]);
   const projectOrder = useUiStateStore((store) => store.projectOrder);
+  const sidebarSpace = useUiStateStore((store) => store.sidebarSpace);
+  const setSidebarSpace = useUiStateStore((store) => store.setSidebarSpace);
   const threads = useThreadShells();
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const {
@@ -2087,6 +2092,23 @@ function OpenCommandPaletteDialog(props: {
       openOverlayMode("files");
     },
   });
+
+  // Offered where the sidebar shows its switch, and always from Dev support so it cannot strand you.
+  if (
+    sidebarSpace === "support" ||
+    [...serverConfigs.values()].some((config) => config.environment.capabilities.threadSpaces)
+  ) {
+    actionItems.push({
+      kind: "action",
+      value: "action:switch-thread-space",
+      searchTerms: ["dev support", "support", "development", "space", "switch", "tickets"],
+      title: `Switch to ${THREAD_SPACE_LABELS[otherThreadSpace(sidebarSpace)]}`,
+      icon: <ArrowRightLeftIcon className={ITEM_ICON_CLASS} />,
+      run: async () => {
+        setSidebarSpace(otherThreadSpace(sidebarSpace));
+      },
+    });
+  }
 
   actionItems.push({
     kind: "action",

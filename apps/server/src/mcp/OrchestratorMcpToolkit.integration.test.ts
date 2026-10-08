@@ -2294,6 +2294,29 @@ describe("orchestrator MCP toolkit", () => {
             );
             expect(unlinked.linkedPullRequest).toBeNull();
 
+            const movedCall = yield* invoke("t3_thread_update", {
+              threadId: emptyThread.threadId,
+              action: "set_space",
+              space: "support",
+              clientRequestId: "metadata-set-space-1",
+            });
+            const moved = yield* decodeThreadUpdateResult(movedCall.structuredContent).pipe(
+              Effect.orDie,
+            );
+            expect(moved).toMatchObject({ action: "set_space", space: "support" });
+            expect(moved.updatedAt).toBe(unlinked.updatedAt);
+            const supportListCall = yield* invoke("t3_thread_list", {
+              space: "support",
+              limit: 100,
+            });
+            const supportList = yield* decodeThreadListResult(
+              supportListCall.structuredContent,
+            ).pipe(Effect.orDie);
+            expect(supportList.threads.map((thread) => thread.threadId)).toEqual([
+              emptyThread.threadId,
+            ]);
+            expect(supportList.threads[0]).toMatchObject({ space: "support" });
+
             const regenerateCall = yield* invoke("t3_thread_update", {
               threadId: emptyThread.threadId,
               action: "regenerate_title",
