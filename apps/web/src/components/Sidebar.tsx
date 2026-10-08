@@ -288,6 +288,8 @@ import {
 import { SidebarContent, SidebarGroup, useSidebar } from "./ui/sidebar";
 import { SidebarChromeFooter, SidebarChromeHeader } from "./sidebar/SidebarChrome";
 import { SidebarUsageSummary } from "./sidebar/SidebarUsageSummary";
+import { SidebarSpaceSwitch } from "./sidebar/SidebarSpaceSwitch";
+import { otherThreadSpace, threadSpaceOf, useSidebarSpace } from "../threadSpace";
 import { SidebarHeaderIconButton, SidebarThreadHeader } from "./sidebar/SidebarThreadHeader";
 import { Menu, MenuItem, MenuPopup, MenuSeparator, MenuShortcut, MenuTrigger } from "./ui/menu";
 import { SidebarEnvironmentFilter } from "./sidebar/SidebarEnvironmentFilter";
@@ -2433,6 +2435,7 @@ export default function Sidebar() {
   const projects = useProjects();
   const projectOrder = useUiStateStore((store) => store.projectOrder);
   const threads = useThreadShells();
+  const sidebarSpace = useSidebarSpace();
   const router = useRouter();
   const { isMobile, setOpenMobile } = useSidebar();
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
@@ -2451,6 +2454,7 @@ export default function Sidebar() {
     unpinThread,
     confirmAndUnpinThread,
     setThreadAutoSettle,
+    setThreadSpace,
     reorderPinnedThread,
     reorderActiveThread,
     markThreadUnread,
@@ -2867,7 +2871,9 @@ export default function Sidebar() {
     const preciseNow = new Date().toISOString();
     // Subagent child threads live in the parent's Agents surface, not the
     // sidebar roster (v2 models them as real threads with lineage).
-    const visible = filterSidebarV2VisibleThreads(threads, scopedProjectKeys);
+    const visible = filterSidebarV2VisibleThreads(threads, scopedProjectKeys).filter(
+      (thread) => threadSpaceOf(thread) === sidebarSpace,
+    );
     inboxReturns.observe(workingShelfEnabled ? threads : null);
     const pinned: EnvironmentThreadShell[] = [];
     const active: EnvironmentThreadShell[] = [];
@@ -2972,6 +2978,7 @@ export default function Sidebar() {
     optimisticDrop,
     scopedProjectKeys,
     serverConfigs,
+    sidebarSpace,
     snoozeWakeTick,
     threads,
     workingShelfEnabled,
@@ -4722,6 +4729,7 @@ export default function Sidebar() {
               canSnoozeNow: canSnooze(thread, { now: new Date().toISOString() }),
               isRegeneratingTitle,
               isRunning: !threadRuntimeCanArchive(thread.runtime),
+              space: threadSpaceOf(thread),
               supports: {
                 settlement: supportsSettlement,
                 autoSettleOptOut: supportsAutoSettleOptOut,
@@ -4731,6 +4739,9 @@ export default function Sidebar() {
                 nativeThreadId:
                   serverConfigs.get(thread.environmentId)?.environment.capabilities
                     .nativeThreadId === true,
+                spaces:
+                  serverConfigs.get(thread.environmentId)?.environment.capabilities.threadSpaces ===
+                  true,
               },
               snoozePresets,
             }),
@@ -4846,6 +4857,20 @@ export default function Sidebar() {
           case "mark-unread":
             markThreadUnread(threadRef);
             return;
+          case "move-space": {
+            const result = await setThreadSpace(threadRef, otherThreadSpace(threadSpaceOf(thread)));
+            if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+              const error = squashAtomCommandFailure(result);
+              toastManager.add(
+                stackedThreadToast({
+                  type: "error",
+                  title: "Failed to move thread",
+                  description: error instanceof Error ? error.message : "An error occurred.",
+                }),
+              );
+            }
+            return;
+          }
           case "copy-path":
             if (!threadWorkspacePath) {
               toastManager.add(
@@ -4953,6 +4978,7 @@ export default function Sidebar() {
       serverConfigs,
       setProjectScopeKey,
       setThreadAutoSettle,
+      setThreadSpace,
       startThreadRename,
       updateThreadMetadata,
       timestampFormat,
@@ -5086,6 +5112,7 @@ export default function Sidebar() {
           // Lifted above the stage backdrop, whose fade bleeds below the
           // header and would otherwise paint across the search row's outline.
           <SidebarGroup className="z-[1]">
+            <SidebarSpaceSwitch />
             <SidebarThreadHeader
               searchFieldRef={headerSearchRef}
               hasProjects={projectGroups.length > 0 || showEnvironmentFilter}
