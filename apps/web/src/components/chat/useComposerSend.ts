@@ -69,6 +69,7 @@ import { writeTextToClipboard } from "~/hooks/useCopyToClipboard";
 import { newMessageId, newThreadId } from "~/lib/utils";
 import { readPendingWorkspaceDefault, useNewThreadHandler } from "../../hooks/useHandleNewThread";
 import { buildThreadRouteParams } from "../../threadRoutes";
+import { readSidebarSpace } from "../../threadSpace";
 import {
   beginBackgroundDraftSubmissionByRef,
   clearBackgroundDraftSubmissionByRef,
@@ -1137,6 +1138,8 @@ export function useComposerSend(input: ComposerSendInput) {
       return composerDraftContentChanged(draftBeforePreparation, draft);
     };
     sendInFlightRef.current = true;
+    // Read before the uploads below: the sidebar can switch spaces while they run.
+    const threadSpaceForSend = readSidebarSpace();
     const sendGeneration = ++composerSendGenerationRef.current;
     const attachmentCapabilitiesBeforeUpload = readLiveAttachmentCapabilities();
     if (attachmentCapabilitiesBeforeUpload.fileBlockReason !== null) {
@@ -1393,6 +1396,7 @@ export function useComposerSend(input: ComposerSendInput) {
       await sendToMultipleModels({
         threadId: threadIdForSend,
         project: activeProject,
+        space: threadSpaceForSend,
         branch: activeThreadBranch!,
         selections: multipleModelSelections,
         targets: multipleTargets,
@@ -1539,6 +1543,7 @@ export function useComposerSend(input: ComposerSendInput) {
                 ? {
                     createThread: {
                       projectId: activeProject.id,
+                      space: threadSpaceForSend,
                       title,
                       modelSelection: threadCreateModelSelection,
                       runtimeMode,

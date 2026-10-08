@@ -455,10 +455,12 @@ export const layer = McpToolAccess.toLayer(ProjectToolkit, {
             )?.supportedRuntimeModes,
           });
         }
+        const space = input.space ?? caller?.space;
         const result = yield* ThreadMessageIntake.launchThread({
           commandId,
           threadId,
           projectId,
+          ...(space === undefined ? {} : { space }),
           title: input.title,
           ...(input.generateTitle === undefined ? {} : { generateTitle: input.generateTitle }),
           ...(input.generateTitle === true ? {} : { titleRenamed: true }),
