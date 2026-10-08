@@ -312,6 +312,12 @@ export const layer = McpToolAccess.toLayer(ThreadToolkit, {
         case "mark_unread":
           command = { ...common, type: "thread.mark-unread" };
           break;
+        case "move_to_support":
+          command = { ...common, type: "thread.space.set", space: "support" };
+          break;
+        case "move_to_development":
+          command = { ...common, type: "thread.space.set", space: "development" };
+          break;
         default:
           command = { ...common, type: `thread.${input.action}` };
       }

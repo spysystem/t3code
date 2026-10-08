@@ -48,6 +48,7 @@ import { useLocation, useNavigate, useParams } from "@tanstack/react-router";
 import * as Option from "effect/Option";
 import {
   ArrowLeftIcon,
+  ArrowRightLeftIcon,
   ChartNoAxesColumnIcon,
   CheckIcon,
   ChevronRightIcon,
@@ -67,6 +68,7 @@ import {
   SquarePenIcon,
   SunIcon,
   TextSearchIcon,
+  TicketIcon,
 } from "lucide-react";
 import {
   useCallback,
@@ -218,6 +220,8 @@ import { ComposerHandleContext, useComposerHandleContext } from "../composerHand
 import type { ChatComposerHandle } from "./chat/ChatComposer";
 import { getProjectOrderKey, selectProjectGroupingSettings } from "../logicalProject";
 import { legacyProjectCwdPreferenceKey, useUiStateStore } from "../uiStateStore";
+import { otherThreadSpace, THREAD_SPACE_LABELS } from "../threadSpace";
+import { openDevSupportTicketDialog } from "./DevSupportTicketDialog";
 import {
   buildSidebarProjectPickerEntries,
   buildSidebarProjectSnapshots,
@@ -794,6 +798,8 @@ function OpenCommandPaletteDialog(props: {
     }
   }, [activeThreadReferenceCopyTarget]);
   const projectOrder = useUiStateStore((store) => store.projectOrder);
+  const sidebarSpace = useUiStateStore((store) => store.sidebarSpace);
+  const setSidebarSpace = useUiStateStore((store) => store.setSidebarSpace);
   const threads = useThreadShells();
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const {
@@ -2052,6 +2058,28 @@ function OpenCommandPaletteDialog(props: {
     shortcutCommand: "filePicker.toggle",
     run: async () => {
       openOverlayMode("files");
+    },
+  });
+
+  actionItems.push({
+    kind: "action",
+    value: "action:switch-thread-space",
+    searchTerms: ["dev support", "support", "development", "space", "switch view", "tickets"],
+    title: `Switch to ${THREAD_SPACE_LABELS[otherThreadSpace(sidebarSpace)]}`,
+    icon: <ArrowRightLeftIcon className={ITEM_ICON_CLASS} />,
+    run: async () => {
+      setSidebarSpace(otherThreadSpace(sidebarSpace));
+    },
+  });
+
+  actionItems.push({
+    kind: "action",
+    value: "action:dev-support-ticket",
+    searchTerms: ["dev support", "ticket", "task", "support", "start from ticket"],
+    title: "Start dev-support ticket…",
+    icon: <TicketIcon className={ITEM_ICON_CLASS} />,
+    run: async () => {
+      openDevSupportTicketDialog();
     },
   });
 

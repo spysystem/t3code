@@ -413,6 +413,7 @@ function commandThreadId(command: OrchestrationV2ServerCommand): ThreadId {
     case "thread.snooze":
     case "thread.unsnooze":
     case "thread.auto-settle.set":
+    case "thread.space.set":
     case "thread.pin":
     case "thread.unpin":
     case "thread.pin.reorder":
@@ -2182,6 +2183,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       interactionMode: command.interactionMode,
       branch: command.branch,
       worktreePath: command.worktreePath,
+      ...(command.space === undefined ? {} : { space: command.space }),
       activeProviderThreadId: null,
       lineage: {
         parentThreadId: null,
@@ -2353,6 +2355,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           | "thread.snooze"
           | "thread.unsnooze"
           | "thread.auto-settle.set"
+          | "thread.space.set"
           | "thread.pin"
           | "thread.unpin"
           | "thread.pin.reorder"
@@ -2819,6 +2822,10 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
             updatedAt: unchanged ? thread.updatedAt : now,
           };
         }
+        // Moving between spaces is organization, not activity: it keeps
+        // updatedAt so the thread does not jump to the top of either view.
+        case "thread.space.set":
+          return { ...thread, space: command.space };
         case "thread.pin": {
           // Pinning is a promotion: it clears the parked states rather than
           // silently outranking them — an explicit settle is un-settled and a
@@ -3172,6 +3179,8 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           return "thread.unsnoozed" as const;
         case "thread.auto-settle.set":
           return "thread.auto-settle-set" as const;
+        case "thread.space.set":
+          return "thread.space-set" as const;
         case "thread.pin":
           return "thread.pinned" as const;
         case "thread.unpin":
@@ -10199,6 +10208,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       case "thread.snooze":
       case "thread.unsnooze":
       case "thread.auto-settle.set":
+      case "thread.space.set":
       case "thread.pin":
       case "thread.unpin":
       case "thread.pin.reorder":

@@ -217,6 +217,8 @@ import {
   type PendingUserInputDraftAnswer,
 } from "../pendingUserInput";
 import { useUiStateStore } from "../uiStateStore";
+import { readSidebarSpace } from "../threadSpace";
+import { extractSupporterReply } from "./devSupportTicket.logic";
 import { useWorkspaceMutationRefresh } from "../hooks/useWorkspaceMutationRefresh";
 import {
   buildPlanImplementationThreadTitle,
@@ -3942,6 +3944,12 @@ export default function ChatView(props: ChatViewProps) {
   const timelineMessages = useMemo(
     () => timelineEntries.flatMap((entry) => (entry.kind === "message" ? [entry.message] : [])),
     [timelineEntries],
+  );
+  const timelineMessagesRef = useRef(timelineMessages);
+  timelineMessagesRef.current = timelineMessages;
+  const readSupporterReply = useCallback(
+    () => extractSupporterReply(timelineMessagesRef.current),
+    [],
   );
   const displayedTimeline = resolveThreadSwitchTimeline({
     loading: timelineEntries.length === 0 && threadSyncPhase !== null,
@@ -9260,6 +9268,8 @@ export default function ChatView(props: ChatViewProps) {
     }
 
     sendInFlightRef.current = true;
+    // Read before the uploads below: the sidebar view can change while they run.
+    const threadSpaceForSend = readSidebarSpace();
     const sendGeneration = ++composerSendGenerationRef.current;
     const attachmentCapabilitiesBeforeUpload = readLiveAttachmentCapabilities();
     if (attachmentCapabilitiesBeforeUpload.fileBlockReason !== null) {
@@ -9455,6 +9465,7 @@ export default function ChatView(props: ChatViewProps) {
                   bootstrap: {
                     createThread: {
                       projectId: activeProject.id,
+                      space: threadSpaceForSend,
                       title,
                       modelSelection: target.selection,
                       runtimeMode,
@@ -9795,6 +9806,7 @@ export default function ChatView(props: ChatViewProps) {
                 ? {
                     createThread: {
                       projectId: activeProject.id,
+                      space: threadSpaceForSend,
                       title,
                       modelSelection: threadCreateModelSelection,
                       runtimeMode,
@@ -10483,6 +10495,7 @@ export default function ChatView(props: ChatViewProps) {
       input: {
         threadId: nextThreadId,
         projectId: activeProject.id,
+        ...(activeThreadShell?.space === undefined ? {} : { space: activeThreadShell.space }),
         title: nextThreadTitle,
         modelSelection: nextThreadModelSelection,
         runtimeMode: defaultRuntimeMode,
@@ -10573,6 +10586,7 @@ export default function ChatView(props: ChatViewProps) {
     activeProposedPlan,
     activeThreadBranch,
     activeThread,
+    activeThreadShell,
     beginLocalDispatch,
     activeEnvironmentUnavailable,
     createThread,
@@ -11220,6 +11234,7 @@ export default function ChatView(props: ChatViewProps) {
             activeProject={activeProject ?? null}
             rightPanelOpen={inlineRightPanelOwnsTitleBar}
             onNewThreadInProject={handleNewThreadInActiveProject}
+            readSupporterReply={readSupporterReply}
             {...(activeDraftLogicalProjectKey
               ? { onOpenProjectSettings: handleOpenDraftProjectSettings }
               : {})}

@@ -184,6 +184,7 @@ export function applyOrchestrationV2ProjectionEvent(
     // Visited tracking is read state, not activity: skip the updatedAt bump.
     case "thread.visited":
     case "thread.marked-unread":
+    case "thread.space-set":
       return { ...projection, thread: event.payload };
     case "run.created":
     case "run.updated": {

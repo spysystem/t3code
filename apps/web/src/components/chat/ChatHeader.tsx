@@ -4,6 +4,7 @@ import {
   type ThreadId,
 } from "@t3tools/contracts";
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
+import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
 import {
   isAtomCommandInterrupted,
@@ -25,6 +26,10 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { toastManager } from "../ui/toast";
 import { useThreadActionMenu } from "~/hooks/useThreadActionMenu";
 import { readLocalApi } from "~/localApi";
+import { useThreadShell } from "../../state/entities";
+import { supportTaskIdOf } from "../../threadSpace";
+import { ThreadLink, useThreadLink } from "../ThreadLink";
+import { SupportTicketMenu } from "./SupportTicketMenu";
 import { threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { useOrchestrationCommand } from "../../state/use-orchestration-command";
@@ -48,6 +53,18 @@ interface ChatHeaderProps {
   rightPanelOpen: boolean;
   onNewThreadInProject: () => void;
   onOpenProjectSettings?: (() => void) | undefined;
+  /** The agent's latest reply for the supporter, for support threads' Copy reply. */
+  readSupporterReply: () => string | null;
+}
+
+// An empty breadcrumb item would still take a flex gap, so render only on a match.
+function HeaderThreadLink({ thread }: { readonly thread: EnvironmentThreadShell }) {
+  if (useThreadLink(thread) === null) return null;
+  return (
+    <WorkspaceBreadcrumbItem className="shrink-0">
+      <ThreadLink thread={thread} />
+    </WorkspaceBreadcrumbItem>
+  );
 }
 
 /**
@@ -80,6 +97,7 @@ export const ChatHeader = memo(function ChatHeader({
   rightPanelOpen,
   onNewThreadInProject,
   onOpenProjectSettings,
+  readSupporterReply,
 }: ChatHeaderProps) {
   const activeProjectName = activeProject?.title;
   const activeProjectCwd = activeProject?.workspaceRoot ?? null;
@@ -91,6 +109,8 @@ export const ChatHeader = memo(function ChatHeader({
     activeThreadEnvironmentId,
     AuthOrchestrationOperateScope,
   );
+  const activeThreadShell = useThreadShell(isServerThread ? activeThreadRef : null);
+  const supportTaskId = activeThreadShell ? supportTaskIdOf(activeThreadShell) : null;
   const updateThreadMetadata = useOrchestrationCommand(threadEnvironment.updateMetadata, {
     reportFailure: false,
   });
@@ -354,6 +374,16 @@ export const ChatHeader = memo(function ChatHeader({
             </Tooltip>
           )}
         </WorkspaceBreadcrumbItem>
+        {activeThreadShell ? <HeaderThreadLink thread={activeThreadShell} /> : null}
+        {supportTaskId !== null && activeThreadShell ? (
+          <WorkspaceBreadcrumbItem className="shrink-0">
+            <SupportTicketMenu
+              thread={activeThreadShell}
+              taskId={supportTaskId}
+              readSupporterReply={readSupporterReply}
+            />
+          </WorkspaceBreadcrumbItem>
+        ) : null}
       </WorkspaceBreadcrumb>
     </div>
   );

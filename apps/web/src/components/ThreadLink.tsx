@@ -6,13 +6,20 @@ import { serverEnvironment } from "../state/server";
 
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 
-export function ThreadLink({
-  thread,
-}: {
-  thread: { title: string; environmentId: EnvironmentId; projectId: ProjectId };
-}) {
+interface ThreadLinkTarget {
+  readonly title: string;
+  readonly environmentId: EnvironmentId;
+  readonly projectId: ProjectId;
+}
+
+/** The link the project's thread-link rules make from the title, or null. */
+export function useThreadLink(thread: ThreadLinkTarget) {
   const settings = useAtomValue(serverEnvironment.settingsValueAtom(thread.environmentId));
-  const task = getThreadLink(thread.title, resolveThreadLinkRules(settings, thread.projectId));
+  return getThreadLink(thread.title, resolveThreadLinkRules(settings, thread.projectId));
+}
+
+export function ThreadLink({ thread }: { thread: ThreadLinkTarget }) {
+  const task = useThreadLink(thread);
   if (task === null) return null;
 
   const label = task.label;

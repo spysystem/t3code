@@ -12,6 +12,7 @@ import {
   type ModelSelection,
   type OrchestrationV2Command,
   type OrchestrationV2CreationSource,
+  type OrchestrationV2ThreadSpace,
   type PlanId,
   type ProjectId,
   type ProjectIconOverride,
@@ -69,6 +70,7 @@ export interface DeleteProjectInput extends CommandMetadata {
 export interface CreateThreadInput extends CommandMetadata {
   readonly threadId: ThreadId;
   readonly projectId: ProjectId;
+  readonly space?: OrchestrationV2ThreadSpace;
   readonly title: string;
   readonly modelSelection: ModelSelection;
   readonly runtimeMode: RuntimeMode;
@@ -144,6 +146,7 @@ export interface SetThreadInteractionModeInput extends ThreadCommandInput {
 interface StartThreadBootstrap {
   readonly createThread?: {
     readonly projectId: ProjectId;
+    readonly space?: OrchestrationV2ThreadSpace;
     readonly title: string;
     readonly modelSelection: ModelSelection;
     readonly runtimeMode: RuntimeMode;
@@ -400,6 +403,7 @@ export const createThread = Effect.fn("EnvironmentCommands.createThread")(functi
     creationSource: input.creationSource ?? "web",
     threadId: input.threadId,
     projectId: input.projectId,
+    ...(input.space === undefined ? {} : { space: input.space }),
     title: input.title,
     modelSelection: input.modelSelection,
     runtimeMode: input.runtimeMode,
@@ -457,6 +461,20 @@ export const pinThread = Effect.fn("EnvironmentCommands.pinThread")(function* (
     commandId,
     threadId: input.threadId,
     ...(input.orderKey === undefined ? {} : { orderKey: input.orderKey }),
+  });
+});
+
+export interface SetThreadSpaceInput extends ThreadCommandInput {
+  readonly space: OrchestrationV2ThreadSpace;
+}
+export const setThreadSpace = Effect.fn("EnvironmentCommands.setThreadSpace")(function* (
+  input: SetThreadSpaceInput,
+) {
+  return yield* dispatch({
+    type: "thread.space.set",
+    commandId: yield* allocateCommandId(input),
+    threadId: input.threadId,
+    space: input.space,
   });
 });
 
@@ -671,6 +689,7 @@ export const startThreadTurn = Effect.fn("EnvironmentCommands.startThreadTurn")(
       threadId: input.threadId,
       ...(bootstrap === undefined ? { reuseExistingThread: true } : {}),
       projectId: thread.projectId,
+      ...(bootstrap?.space === undefined ? {} : { space: bootstrap.space }),
       title: input.titleSeed ?? thread.title,
       generateTitle: input.titleSeed !== undefined,
       modelSelection: input.modelSelection ?? thread.modelSelection,
