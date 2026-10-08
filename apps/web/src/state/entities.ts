@@ -283,6 +283,14 @@ export function readEnvironmentSupportsSettlement(environmentId: EnvironmentId):
   );
 }
 
+/** Whether the environment's server stores thread spaces. */
+export function readEnvironmentSupportsSpaces(environmentId: EnvironmentId): boolean {
+  return (
+    appAtomRegistry.get(environmentServerConfigsAtom).get(environmentId)?.environment.capabilities
+      .threadSpaces === true
+  );
+}
+
 /** Whether the environment's server understands thread.snooze/unsnooze.
     Same version-skew contract as settlement. */
 export function readEnvironmentSupportsSnooze(environmentId: EnvironmentId): boolean {

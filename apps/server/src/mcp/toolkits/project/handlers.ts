@@ -135,10 +135,12 @@ export const layer = McpToolAccess.toLayer(ProjectToolkit, {
             message:
               "Pass modelSelection: the project has no default model. orchestrator_capabilities lists providers and models.",
           });
+        const space = input.space ?? caller?.space;
         const result = yield* ThreadMessageIntake.launchThread({
           commandId,
           threadId,
           projectId,
+          ...(space === undefined ? {} : { space }),
           title: input.title,
           modelSelection,
           runtimeMode,

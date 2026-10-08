@@ -159,6 +159,31 @@ describe("applyOrchestrationV2ProjectionEvent", () => {
     expect(next?.updatedAt).toEqual(archivedAt);
   });
 
+  it("keeps the projection's place when metadata only moves the thread to another space", () => {
+    const later = DateTime.makeUnsafe("2026-06-20T01:00:00.000Z");
+    const metadataEvent = (payload: OrchestrationV2ThreadProjection["thread"]) =>
+      ({
+        id: "event-metadata",
+        type: "thread.metadata-updated",
+        threadId,
+        occurredAt: later,
+        payload,
+      }) as OrchestrationV2DomainEvent;
+
+    const moved = applyOrchestrationV2ProjectionEvent(
+      emptyProjection,
+      metadataEvent({ ...emptyProjection.thread, space: "support" }),
+    );
+    expect(moved?.thread.space).toBe("support");
+    expect(moved?.updatedAt).toEqual(now);
+
+    const renamed = applyOrchestrationV2ProjectionEvent(
+      emptyProjection,
+      metadataEvent({ ...emptyProjection.thread, title: "Renamed", updatedAt: later }),
+    );
+    expect(renamed?.updatedAt).toEqual(later);
+  });
+
   it("ignores events for another thread", () => {
     const event = {
       id: "event-other",
