@@ -726,6 +726,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: [msg("test voice speech model transcription recognition")],
   },
   {
+    id: "sidebar-usage-summary",
+    title: msg("Usage in sidebar"),
+    to: "/settings/general",
+    searchTerms: [msg("limits quota rate subscription remaining percent box")],
+  },
+  {
     id: "auto-settle-inactive-threads",
     title: msg("Auto-settle inactive threads"),
     to: "/settings/threads",
