@@ -375,6 +375,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: ["beta share guest invite link teammate watch t3 connect tunnel"],
   },
   {
+    id: "sidebar-usage-summary",
+    title: "Usage in sidebar",
+    to: "/settings/general",
+    searchTerms: ["limits quota rate subscription remaining percent box"],
+  },
+  {
     id: "auto-settle-inactive-threads",
     title: "Auto-settle inactive threads",
     to: "/settings/general",

@@ -459,6 +459,9 @@ export function useSettingsRestore(onRestored?: () => void) {
     ...(settings.sidebarWorkingShelfEnabled !== DEFAULT_UNIFIED_SETTINGS.sidebarWorkingShelfEnabled
       ? ["Working section"]
       : []),
+    ...(settings.sidebarUsageSummaryEnabled !== DEFAULT_UNIFIED_SETTINGS.sidebarUsageSummaryEnabled
+      ? ["Usage in sidebar"]
+      : []),
     ...(settings.sidebarAutoSettleAfterDays !== DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleAfterDays
       ? ["Auto-settle inactive threads"]
       : []),
@@ -627,6 +630,7 @@ export function useSettingsRestore(onRestored?: () => void) {
       sidebarProjectGroupingMode: DEFAULT_UNIFIED_SETTINGS.sidebarProjectGroupingMode,
       sidebarProjectSortOrder: DEFAULT_UNIFIED_SETTINGS.sidebarProjectSortOrder,
       sidebarWorkingShelfEnabled: DEFAULT_UNIFIED_SETTINGS.sidebarWorkingShelfEnabled,
+      sidebarUsageSummaryEnabled: DEFAULT_UNIFIED_SETTINGS.sidebarUsageSummaryEnabled,
       sidebarAutoSettleAfterDays: DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleAfterDays,
       sidebarAutoSettleKeepPullRequests: DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleKeepPullRequests,
       sidebarAutoSettleOnMerge: DEFAULT_UNIFIED_SETTINGS.sidebarAutoSettleOnMerge,
@@ -985,6 +989,33 @@ export function GeneralSettingsPanel() {
                 updateSettings({ snoozeLimitedThreads: Boolean(checked) })
               }
               aria-label="Snooze until limits reset"
+            />
+          }
+        />
+
+        <SettingsRow
+          {...searchableSetting("sidebar-usage-summary")}
+          description="Show remaining subscription limits in a small box under Search in the sidebar."
+          resetAction={
+            settings.sidebarUsageSummaryEnabled !==
+            DEFAULT_UNIFIED_SETTINGS.sidebarUsageSummaryEnabled ? (
+              <SettingResetButton
+                label="usage in sidebar"
+                onClick={() =>
+                  updateSettings({
+                    sidebarUsageSummaryEnabled: DEFAULT_UNIFIED_SETTINGS.sidebarUsageSummaryEnabled,
+                  })
+                }
+              />
+            ) : null
+          }
+          control={
+            <Switch
+              checked={settings.sidebarUsageSummaryEnabled}
+              onCheckedChange={(checked) =>
+                updateSettings({ sidebarUsageSummaryEnabled: Boolean(checked) })
+              }
+              aria-label="Usage in sidebar"
             />
           }
         />
