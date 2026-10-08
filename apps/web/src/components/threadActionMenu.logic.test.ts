@@ -13,17 +13,23 @@ const baseState: ThreadActionMenuState = {
   canSnoozeNow: true,
   isRegeneratingTitle: false,
   isRunning: false,
+  space: "development",
   supports: {
     settlement: true,
     autoSettleOptOut: true,
     snooze: true,
     pinning: true,
     titleRegeneration: true,
+    spaces: false,
   },
   snoozePresets: [
     { id: "hour", label: "In 1 hour", whenLabel: "3:00 PM", snoozedUntil: "2026-08-07T15:00:00Z" },
   ],
 };
+
+function ids(state: ThreadActionMenuState): string[] {
+  return buildThreadActionMenuItems(state).map((item) => item.id);
+}
 
 function allIds(state: ThreadActionMenuState): string[] {
   const flatten = (items: ReturnType<typeof buildThreadActionMenuItems>): string[] =>
@@ -79,6 +85,18 @@ describe("buildThreadActionMenuItems", () => {
     });
     expect(supported).toContain("copy-thread-id");
     expect(supported).toContain("copy-native-thread-id");
+  });
+
+  it("offers the move to the other space only where the server supports spaces", () => {
+    const label = (space: "development" | "support") =>
+      buildThreadActionMenuItems({
+        ...baseState,
+        space,
+        supports: { ...baseState.supports, spaces: true },
+      }).find((item) => item.id === "move-space")?.label;
+    expect(label("development")).toBe("Move to Dev support");
+    expect(label("support")).toBe("Move to Development");
+    expect(ids(baseState)).not.toContain("move-space");
   });
 
   it("disables archive while the thread is running", () => {
