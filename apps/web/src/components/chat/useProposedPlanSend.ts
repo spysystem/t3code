@@ -312,6 +312,7 @@ export function useImplementPlanInNewThread(input: ImplementPlanInNewThreadInput
       input: {
         threadId: nextThreadId,
         projectId: activeProject.id,
+        ...(activeThread.space === undefined ? {} : { space: activeThread.space }),
         title: nextThreadTitle,
         modelSelection: nextThreadModelSelection,
         runtimeMode: defaultRuntimeMode,
