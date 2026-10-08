@@ -9268,6 +9268,8 @@ export default function ChatView(props: ChatViewProps) {
     }
 
     sendInFlightRef.current = true;
+    // Read before the uploads below: the sidebar view can change while they run.
+    const threadSpaceForSend = readSidebarSpace();
     const sendGeneration = ++composerSendGenerationRef.current;
     const attachmentCapabilitiesBeforeUpload = readLiveAttachmentCapabilities();
     if (attachmentCapabilitiesBeforeUpload.fileBlockReason !== null) {
@@ -9463,7 +9465,7 @@ export default function ChatView(props: ChatViewProps) {
                   bootstrap: {
                     createThread: {
                       projectId: activeProject.id,
-                      space: readSidebarSpace(),
+                      space: threadSpaceForSend,
                       title,
                       modelSelection: target.selection,
                       runtimeMode,
@@ -9804,7 +9806,7 @@ export default function ChatView(props: ChatViewProps) {
                 ? {
                     createThread: {
                       projectId: activeProject.id,
-                      space: readSidebarSpace(),
+                      space: threadSpaceForSend,
                       title,
                       modelSelection: threadCreateModelSelection,
                       runtimeMode,
@@ -10493,7 +10495,7 @@ export default function ChatView(props: ChatViewProps) {
       input: {
         threadId: nextThreadId,
         projectId: activeProject.id,
-        space: readSidebarSpace(),
+        ...(activeThreadShell?.space === undefined ? {} : { space: activeThreadShell.space }),
         title: nextThreadTitle,
         modelSelection: nextThreadModelSelection,
         runtimeMode: defaultRuntimeMode,
@@ -10584,6 +10586,7 @@ export default function ChatView(props: ChatViewProps) {
     activeProposedPlan,
     activeThreadBranch,
     activeThread,
+    activeThreadShell,
     beginLocalDispatch,
     activeEnvironmentUnavailable,
     createThread,

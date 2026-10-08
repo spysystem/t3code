@@ -61,23 +61,17 @@ function SidebarUsageSummaryBox() {
   if (pools.length === 0) return null;
 
   return (
-    <div
-      role="button"
-      tabIndex={0}
+    <button
+      type="button"
       aria-label="Open usage"
       onClick={openUsage}
-      onKeyDown={(event) => {
-        if (event.key !== "Enter" && event.key !== " ") return;
-        event.preventDefault();
-        openUsage();
-      }}
-      className="mt-1.5 flex cursor-pointer flex-col gap-2 rounded-lg border border-sidebar-border bg-sidebar-control-surface px-2.5 py-2 outline-hidden transition-colors hover:bg-sidebar-row-hover focus-visible:ring-1 focus-visible:ring-ring"
+      className="mt-1.5 flex w-full cursor-pointer flex-col gap-2 text-left rounded-lg border border-sidebar-border bg-sidebar-control-surface px-2.5 py-2 outline-hidden transition-colors hover:bg-sidebar-row-hover focus-visible:ring-1 focus-visible:ring-ring"
     >
       {pools.map((pool) => {
         const label = getDriverOption(pool.driver)?.label ?? String(pool.driver);
         const color = barColor(pool.driver);
         return (
-          <div key={pool.driver} className="flex min-w-0 flex-col gap-1">
+          <span key={pool.driver} className="flex min-w-0 flex-col gap-1">
             <span className="flex min-w-0 items-center gap-1.5 text-xs font-medium text-sidebar-foreground">
               <ProviderInstanceIcon
                 driverKind={pool.driver}
@@ -88,7 +82,7 @@ function SidebarUsageSummaryBox() {
               />
               <span className="truncate">{label}</span>
             </span>
-            <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1">
+            <span className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1">
               {displayLimitWindows(pool).map((window) => (
                 <Tooltip key={`${window.kind}:${window.id}`}>
                   <TooltipTrigger
@@ -114,10 +108,10 @@ function SidebarUsageSummaryBox() {
                   </TooltipPopup>
                 </Tooltip>
               ))}
-            </div>
-          </div>
+            </span>
+          </span>
         );
       })}
-    </div>
+    </button>
   );
 }

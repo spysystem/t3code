@@ -29,7 +29,12 @@ export function useFollowRouteThreadSpace(): void {
   // The shell can arrive after the route does; follow once per opened thread.
   const followedKeyRef = useRef<string | null>(null);
   useEffect(() => {
-    if (routeThreadKey === null || space === null) return;
+    // Leaving thread routes re-arms the follow, so reopening the same thread follows again.
+    if (routeThreadKey === null) {
+      followedKeyRef.current = null;
+      return;
+    }
+    if (space === null) return;
     if (followedKeyRef.current === routeThreadKey) return;
     followedKeyRef.current = routeThreadKey;
     useUiStateStore.getState().setSidebarSpace(space);

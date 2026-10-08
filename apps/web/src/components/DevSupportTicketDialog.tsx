@@ -132,15 +132,21 @@ function DevSupportTicketDialog() {
     reportFailure: false,
   });
   const router = useRouter();
+  // A server without spaces would drop `space` and file the thread under Development.
   const projectItems = useMemo(
     () =>
       projects
+        .filter(
+          (project) =>
+            serverConfigs.get(project.environmentId)?.environment.capabilities.threadSpaces ===
+            true,
+        )
         .map((project) => ({
           key: scopedProjectKey(scopeProjectRef(project.environmentId, project.id)),
           project,
         }))
         .toSorted((left, right) => left.project.title.localeCompare(right.project.title)),
-    [projects],
+    [projects, serverConfigs],
   );
   const [taskInput, setTaskInput] = useState("");
   const [projectKey, setProjectKey] = useState<string | null>(() => {
