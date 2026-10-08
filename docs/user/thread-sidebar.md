@@ -30,6 +30,10 @@ On web and desktop, the switch at the top of the sidebar shows one space at a ti
 - **Move a thread**: Choose **Move to Dev support** or **Move to Development** from its menu; it keeps its place in the list. Opening a thread from the other space, for example from a notification, switches the sidebar to that space.
 - The switch appears once a connected environment supports spaces. Mobile lists threads from both spaces together.
 
+### Start from a ticket
+
+In **Dev support**, press **Start from ticket**, or pick it from the command palette. Enter the task number, then choose a project and model. If a Dev support thread already mentions `#<number>` in its title, T3 Code opens that thread instead. Otherwise it starts a thread in the project's checkout that runs your team's ticket investigation skill. A thread whose first message runs that skill lands in Dev support from any client or agent, not only from this dialog.
+
 ## Sidebar layout and organization
 
 - **Resize or hide** (web/desktop): Drag the sidebar's right edge past its minimum width to hide it; hover the left window edge and click or drag the handle to bring it back.
