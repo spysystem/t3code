@@ -63,6 +63,7 @@ import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
 import { useLocation, useNavigate } from "@tanstack/react-router";
 import {
   ArrowLeftIcon,
+  ArrowRightLeftIcon,
   BugIcon,
   ChartNoAxesColumnIcon,
   CheckIcon,
@@ -293,6 +294,8 @@ import {
   pickableProjectGroups,
 } from "@t3tools/client-runtime/state/project-grouping";
 import { buildSidebarProjectPickerEntries } from "../sidebarProjectGrouping";
+import { useUiStateStore } from "../uiStateStore";
+import { otherThreadSpace, threadSpaceLabel } from "../threadSpace";
 import { PullRequestGlyph } from "~/components/pullRequest/pullRequestIcons";
 import { readPullRequestListPreferences } from "~/components/pullRequest/pullRequestListPreferences";
 import { readIssueListPreferences } from "~/components/issue/issueListPreferences";
@@ -527,7 +530,8 @@ function OpenCommandPaletteDialog(props: {
         : null;
   const openPanelPullRequestUrl = useOpenPanelPullRequestUrl(referenceThreadRef);
   const workflowsReachable = useWorkflowEnvironmentIds().length > 0;
-  const activeThreadServerConfig = useServerConfigs().get(
+  const serverConfigs = useServerConfigs();
+  const activeThreadServerConfig = serverConfigs.get(
     activeThread?.environmentId ?? ("" as EnvironmentId),
   );
   const canShareActiveThreadWithGuest = useAtomValue(
@@ -552,6 +556,8 @@ function OpenCommandPaletteDialog(props: {
     if (activeThreadReferenceCopyTarget === null) return;
     await copyThreadReference(activeThreadReferenceCopyTarget);
   };
+  const sidebarSpace = useUiStateStore((store) => store.sidebarSpace);
+  const setSidebarSpace = useUiStateStore((store) => store.setSidebarSpace);
   // Threads the sidebar shows under their parent open there, so opening a project never lands on one.
   const delegatedUnderParent = useDelegatedUnderParent();
   const threads = useVisibleThreadShells().filter(
@@ -1636,6 +1642,25 @@ function OpenCommandPaletteDialog(props: {
       openChildSearch("files", { query, linkedThreadSearch });
     },
   });
+
+  // Offered where the sidebar shows its switch, and always from Dev support so it cannot strand you.
+  if (
+    sidebarSpace === "support" ||
+    [...serverConfigs.values()].some((config) => config.environment.capabilities.threadSpaces)
+  ) {
+    actionItems.push({
+      kind: "action",
+      value: "action:switch-thread-space",
+      searchTerms: ["dev support", "support", "development", "space", "switch", "tickets"],
+      title: gt("Switch to {space}", {
+        space: threadSpaceLabel(otherThreadSpace(sidebarSpace), messages),
+      }),
+      icon: <ArrowRightLeftIcon className={ITEM_ICON_CLASS} />,
+      run: async () => {
+        setSidebarSpace(otherThreadSpace(sidebarSpace));
+      },
+    });
+  }
 
   actionItems.push({
     kind: "action",

@@ -21,6 +21,15 @@ Threads don't require a project. Pick **No project** (or press `mod+alt+n` on we
 - **Background start** (web/desktop): Press `Cmd+Enter` (macOS) or `Ctrl+Enter` (Windows/Linux) in a new thread to submit it and immediately open another draft with the same workspace mode and base branch.
 - **Same prompt, multiple models** (web/desktop, Git projects): `Shift`-click models in a new thread's model picker to select several. Sending starts a separate thread and worktree for each model.
 
+## Keep support work apart
+
+On web and desktop, the switch at the top of the sidebar shows one space at a time: **Development** or **Dev support**. The command palette's **Switch to** action flips it too.
+
+- **Badge**: The hidden space counts its threads that wait on you: an approval, a question, a ready plan, or a finished turn you have not opened. Settled and snoozed threads do not count.
+- **Where threads land**: A thread you start lands in the space the sidebar shows. A thread started from another thread, such as a fork or a thread an agent launches, keeps that thread's space. Threads started from mobile or by scheduled tasks land in Development.
+- **Move a thread**: Choose **Move to Dev support** or **Move to Development** from its menu; it keeps its place in the list. Opening a thread from the other space, for example from a notification, switches the sidebar to that space.
+- The switch appears once a connected environment supports spaces. Mobile lists threads from both spaces together.
+
 ## Sidebar layout and organization
 
 - **Resize or hide** (web/desktop): Drag the sidebar's right edge past its minimum width to hide it; hover the left window edge and click or drag the handle to bring it back.

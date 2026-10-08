@@ -13,6 +13,7 @@ import {
   type OrchestrationV2WorkflowOrigin,
   type OrchestrationV2LinkOrigin,
   type OrchestrationV2ProviderThreadNativeMetadata,
+  type OrchestrationV2ThreadSpace,
   type OrchestrationV2ThreadProjection,
   type ProviderDriverKind,
   type ProviderInteractionMode,
@@ -106,6 +107,7 @@ export interface ThreadLaunchInput {
   readonly threadId?: ThreadId;
   readonly reuseExistingThread?: boolean;
   readonly projectId: ProjectId;
+  readonly space?: OrchestrationV2ThreadSpace;
   readonly title: string;
   readonly generateTitle?: boolean;
   /** The caller chose `title`, so a first message keeps it. */
@@ -1571,6 +1573,7 @@ const make = Effect.gen(function* () {
                 commandId: input.commandId,
                 threadId: candidateThreadId,
                 projectId: input.projectId,
+                ...(input.space === undefined ? {} : { space: input.space }),
                 title: input.title,
                 ...(input.titleRenamed === true ? { titleRenamed: true } : {}),
                 modelSelection: input.modelSelection,
