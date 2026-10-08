@@ -1,4 +1,5 @@
 import type { OrchestrationV2ThreadSpace } from "@t3tools/contracts";
+import { TicketIcon } from "lucide-react";
 import { memo, useMemo } from "react";
 
 import { useNowMinute } from "../../hooks/useNowMinute";
@@ -6,6 +7,8 @@ import { cn } from "../../lib/utils";
 import { useServerConfigs, useThreadShells } from "../../state/entities";
 import { otherThreadSpace, THREAD_SPACE_LABELS, useSidebarSpace } from "../../threadSpace";
 import { useUiStateStore } from "../../uiStateStore";
+import { openDevSupportTicketDialog } from "../DevSupportTicketDialog";
+import { Button } from "../ui/button";
 import { Toggle, ToggleGroup } from "../ui/toggle-group";
 import { resolveSpaceAttention, type SpaceAttention } from "./spaceAttention.logic";
 
@@ -21,7 +24,7 @@ export const SidebarSpaceSwitch = memo(function SidebarSpaceSwitch() {
   // user there if the capability disappears (e.g. a downgraded server).
   if (!supported && space === "development") return null;
   return (
-    <div className="mb-1.5">
+    <div className="mb-1.5 flex flex-col gap-1.5">
       <ToggleGroup
         aria-label="Thread space"
         className="w-full *:flex-1"
@@ -34,6 +37,12 @@ export const SidebarSpaceSwitch = memo(function SidebarSpaceSwitch() {
         <SpaceToggle space="development" current={space} />
         <SpaceToggle space="support" current={space} />
       </ToggleGroup>
+      {space === "support" ? (
+        <Button variant="outline" size="sm" onClick={openDevSupportTicketDialog}>
+          <TicketIcon />
+          Start from ticket
+        </Button>
+      ) : null}
     </div>
   );
 });

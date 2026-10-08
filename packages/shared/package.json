@@ -235,6 +235,10 @@
       "types": "./src/threadPullRequests.ts",
       "import": "./src/threadPullRequests.ts"
     },
+    "./devSupportTicket": {
+      "types": "./src/devSupportTicket.ts",
+      "import": "./src/devSupportTicket.ts"
+    },
     "./changeRequestUrl": {
       "types": "./src/changeRequestUrl.ts",
       "import": "./src/changeRequestUrl.ts"

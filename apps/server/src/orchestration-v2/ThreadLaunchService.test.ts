@@ -1106,6 +1106,43 @@ it.effect("runs a Scratch thread launched at the root in its own folder", () =>
   }),
 );
 
+it.effect("puts a thread whose first message runs the ticket skill in Dev support", () =>
+  Effect.gen(function* () {
+    const harness = makeHarness();
+    yield* Effect.gen(function* () {
+      const launches = yield* ThreadLaunch.ThreadLaunchService;
+      const ticket = yield* launches.launch({
+        ...launchInput({
+          command: "command:launch:ticket",
+          thread: "thread:launch:ticket",
+          message: "$spy-investigate-ticket 12345",
+        }),
+        space: "development",
+      });
+      assert.equal(ticket.projection.thread.space, "support");
+
+      const chosen = yield* launches.launch({
+        ...launchInput({
+          command: "command:launch:chosen-space",
+          thread: "thread:launch:chosen-space",
+          message: "Fix the build",
+        }),
+        space: "support",
+      });
+      assert.equal(chosen.projection.thread.space, "support");
+
+      const plain = yield* launches.launch(
+        launchInput({
+          command: "command:launch:no-space",
+          thread: "thread:launch:no-space",
+          message: "Fix the build",
+        }),
+      );
+      assert.isUndefined(plain.projection.thread.space);
+    }).pipe(Effect.provide(harness.layer));
+  }),
+);
+
 it.effect("names the worktree itself when the client provides no branch", () =>
   Effect.gen(function* () {
     const harness = makeHarness();
