@@ -118,6 +118,7 @@ import {
   resolveSidebarProjectScopeKeys,
   getSidebarProjectSettingsKey,
   type SidebarProjectSnapshot,
+  threadProjectLabel,
 } from "../sidebarProjectGrouping";
 import { resolveProjectExpanded, useUiStateStore } from "../uiStateStore";
 import {
@@ -829,7 +830,8 @@ function useSidebarLookups() {
   const projectDisplayNameByKey = new Map(
     projectGroups.flatMap((group) =>
       group.memberProjects.map(
-        (project) => [`${project.environmentId}:${project.id}`, group.displayName] as const,
+        (project) =>
+          [`${project.environmentId}:${project.id}`, threadProjectLabel(group, project)] as const,
       ),
     ),
   );
