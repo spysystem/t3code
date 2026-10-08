@@ -26,6 +26,22 @@ export interface SidebarProjectSnapshot extends Project {
   remoteEnvironmentLabels: readonly string[];
 }
 
+/**
+ * What a thread row calls its project. A group that merges projects with
+ * different titles (several checkouts of one repository) names the thread's
+ * own project, since the group name alone cannot tell them apart.
+ */
+export function threadProjectLabel(
+  group: {
+    readonly displayName: string;
+    readonly memberProjects: ReadonlyArray<{ readonly title: string }>;
+  },
+  member: { readonly title: string },
+): string {
+  const titles = new Set(group.memberProjects.map((project) => project.title));
+  return titles.size > 1 ? member.title : group.displayName;
+}
+
 export function projectGroupsSpanEnvironments(
   groups: ReadonlyArray<Pick<SidebarProjectSnapshot, "memberProjects">>,
 ): boolean {
