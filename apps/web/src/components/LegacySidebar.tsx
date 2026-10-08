@@ -234,6 +234,7 @@ import {
   buildSidebarProjectSnapshots,
   type SidebarProjectGroupMember,
   type SidebarProjectSnapshot,
+  threadProjectLabel,
 } from "../sidebarProjectGrouping";
 import { PullRequestGlyph } from "~/components/pullRequest/pullRequestIcons";
 const SIDEBAR_SORT_LABELS: Record<SidebarProjectSortOrder, string> = {
@@ -372,6 +373,8 @@ interface SidebarThreadRowProps {
   attemptArchiveThread: (threadRef: ScopedThreadRef) => Promise<void>;
   settlementSupported: boolean;
   isSettled: boolean;
+  /** Which of the group's projects the thread runs in, when the group name cannot say. */
+  projectLabel: string | null;
   attemptSettleThread: (threadRef: ScopedThreadRef) => Promise<void>;
   attemptUnsettleThread: (threadRef: ScopedThreadRef) => Promise<void>;
   openPrLink: (
@@ -429,6 +432,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     attemptArchiveThread,
     settlementSupported,
     isSettled,
+    projectLabel,
     attemptSettleThread,
     attemptUnsettleThread,
     openPrLink,
@@ -869,6 +873,11 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
               <TooltipPopup side="top">{thread.title}</TooltipPopup>
             </Tooltip>
           )}
+          {projectLabel ? (
+            <span className="max-w-[45%] shrink-0 truncate text-3xs text-sidebar-muted-foreground/70">
+              {projectLabel}
+            </span>
+          ) : null}
         </div>
         <div className="ml-auto flex shrink-0 items-center gap-1.5">
           {canOperatePreview && discoveredPorts.length > 0 && (
@@ -1073,6 +1082,7 @@ interface SidebarProjectThreadListProps {
   expandThreadListForProject: (projectKey: string) => void;
   collapseThreadListForProject: (projectKey: string) => void;
   settlementEnvironmentIds: ReadonlySet<EnvironmentId>;
+  projectLabelByProjectKey: ReadonlyMap<string, string>;
   renderedSettledThreads: readonly SidebarThreadSummary[];
   settledThreadCount: number;
   isSettledListExpanded: boolean;
@@ -1123,6 +1133,7 @@ const SidebarProjectThreadList = memo(function SidebarProjectThreadList(
     expandThreadListForProject,
     collapseThreadListForProject,
     settlementEnvironmentIds,
+    projectLabelByProjectKey,
     renderedSettledThreads,
     settledThreadCount,
     isSettledListExpanded,
@@ -1168,6 +1179,11 @@ const SidebarProjectThreadList = memo(function SidebarProjectThreadList(
         attemptArchiveThread={attemptArchiveThread}
         settlementSupported={settlementSupported}
         isSettled={isLegacySidebarThreadSettled(thread, settlementSupported)}
+        projectLabel={
+          projectLabelByProjectKey.get(
+            scopedProjectKey(scopeProjectRef(thread.environmentId, thread.projectId)),
+          ) ?? null
+        }
         attemptSettleThread={attemptSettleThread}
         attemptUnsettleThread={attemptUnsettleThread}
         openPrLink={openPrLink}
@@ -1457,6 +1473,24 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
         ]),
       ),
     [project.memberProjects],
+  );
+  // The project header already names the group; rows only add which checkout.
+  const projectLabelByProjectKey = useMemo(
+    () =>
+      new Map(
+        project.memberProjects.flatMap((member) => {
+          const label = threadProjectLabel(project, member);
+          return label === project.displayName
+            ? []
+            : [
+                [
+                  scopedProjectKey(scopeProjectRef(member.environmentId, member.id)),
+                  label,
+                ] as const,
+              ];
+        }),
+      ),
+    [project],
   );
   const memberThreadCountByPhysicalKey = useMemo(() => {
     const counts = new Map<string, number>(
@@ -2813,6 +2847,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
         expandThreadListForProject={expandThreadListForProject}
         collapseThreadListForProject={collapseThreadListForProject}
         settlementEnvironmentIds={settlementEnvironmentIds}
+        projectLabelByProjectKey={projectLabelByProjectKey}
         renderedSettledThreads={renderedSettledThreads}
         settledThreadCount={settledProjectThreads.length}
         isSettledListExpanded={settledVisibleCount > 0}
