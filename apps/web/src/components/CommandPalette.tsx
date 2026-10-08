@@ -78,6 +78,7 @@ import {
   SquarePenIcon,
   SunIcon,
   TextSearchIcon,
+  TicketIcon,
 } from "lucide-react";
 import { requestThreadFindOpen } from "./chat/threadFindActionBus";
 import {
@@ -249,6 +250,7 @@ import type { ChatComposerHandle } from "./chat/ChatComposer";
 import { getProjectOrderKey } from "../logicalProject";
 import { legacyProjectCwdPreferenceKey, useUiStateStore } from "../uiStateStore";
 import { otherThreadSpace, THREAD_SPACE_LABELS } from "../threadSpace";
+import { openDevSupportTicketDialog } from "./DevSupportTicketDialog";
 import {
   buildSidebarProjectPickerEntries,
   buildSidebarProjectSnapshots,
@@ -1837,6 +1839,16 @@ function OpenCommandPaletteDialog(props: {
       icon: <ArrowRightLeftIcon className={ITEM_ICON_CLASS} />,
       run: async () => {
         setSidebarSpace(otherThreadSpace(sidebarSpace));
+      },
+    });
+    actionItems.push({
+      kind: "action",
+      value: "action:start-from-ticket",
+      searchTerms: ["dev support", "ticket", "task", "support", "investigate"],
+      title: "Start from ticket…",
+      icon: <TicketIcon className={ITEM_ICON_CLASS} />,
+      run: async () => {
+        openDevSupportTicketDialog();
       },
     });
   }
