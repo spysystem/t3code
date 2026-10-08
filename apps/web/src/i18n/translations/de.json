@@ -13088,5 +13088,14 @@
   "8c4903954fae9135": "Show remaining subscription limits in a small box under Search in the sidebar.",
   "31057b4009dec210": "Reset usage in sidebar to default",
   "42d87bf65f4f43bc": "Usage in sidebar",
-  "aac48a016a66edda": "limits quota rate subscription remaining percent box"
+  "aac48a016a66edda": "limits quota rate subscription remaining percent box",
+  "9fc0c5471a5a3a80": "Dev support",
+  "25704c96f90ffd3e": "Development",
+  "7f7e6d5434237efe": "Switch to {space}",
+  "81e970ec32df90c6": "Failed to move thread",
+  "7d630260f89fe10d": "Move to Development",
+  "6baf10f050ffa6e8": "Move to Dev support",
+  "f1836c49140bef04": "Moved to {space}",
+  "ef9a8200316ed44b": "Thread space",
+  "3fb2c7b83bab7ea3": "{count} waiting in {space}"
 }

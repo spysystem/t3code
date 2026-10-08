@@ -22,6 +22,7 @@ function makeUiState(overrides: Partial<UiState> = {}): UiState {
     projectOrder: [],
     sidebarProjectScopeKeys: [],
     sidebarEnvironmentScopeId: null,
+    sidebarSpace: "development",
     threadLastVisitedAtById: {},
     defaultAdvertisedEndpointKey: null,
     pullRequestMergeMethod: "merge",
@@ -134,6 +135,7 @@ describe("parsePersistedState", () => {
       defaultAdvertisedEndpointKey: "desktop-core:lan:http",
       sidebarProjectScopeKeys: [],
       sidebarEnvironmentScopeId: null,
+      sidebarSpace: "development",
       pullRequestMergeMethod: "merge",
     });
   });
@@ -222,6 +224,7 @@ describe("uiStateStore persistence", () => {
       sidebarProjectScopeKeys: [],
       sidebarProjectScopeKey: null,
       sidebarEnvironmentScopeId: null,
+      sidebarSpace: "development",
       pullRequestMergeMethod: "merge",
     });
     expect(parsePersistedState(persisted)).toEqual({

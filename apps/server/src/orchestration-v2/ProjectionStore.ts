@@ -74,6 +74,7 @@ import {
   OrchestrationV2RuntimeRequestJson as OrchestrationV2RuntimeRequestJsonSchema,
   OrchestrationV2SubagentJson as OrchestrationV2SubagentJsonSchema,
   OrchestrationV2TurnItemJson as OrchestrationV2TurnItemJsonSchema,
+  isOrchestrationV2ThreadSpaceMove,
   orchestrationV2RunWorkStartedAt,
   RunId,
   MessageId,
@@ -534,6 +535,7 @@ export type ActiveThreadListEntry = Pick<
   | "settledOverride"
   | "settledAt"
   | "snoozedUntil"
+  | "space"
   | "updatedAt"
 >;
 
@@ -1072,7 +1074,6 @@ export function applyToProjection(
     case "thread.pinned":
     case "thread.unpinned":
     case "thread.pin-reordered":
-    case "thread.metadata-updated":
     case "thread.runtime-mode-updated":
     case "thread.interaction-mode-updated":
     case "thread.model-selection-updated":
@@ -1091,6 +1092,11 @@ export function applyToProjection(
         ...base,
         thread: event.payload,
         updatedAt: event.payload.updatedAt,
+      };
+    case "thread.metadata-updated":
+      return {
+        ...(isOrchestrationV2ThreadSpaceMove(projection.thread, event.payload) ? projection : base),
+        thread: event.payload,
       };
     case "thread.visited":
     case "thread.marked-unread":
@@ -2040,6 +2046,7 @@ export function threadShellFromProjection(
     pinnedAt: projection.thread.pinnedAt ?? null,
 
     autoSettleDisabledAt: projection.thread.autoSettleDisabledAt ?? null,
+    ...(projection.thread.space === undefined ? {} : { space: projection.thread.space }),
     pinOrderKey: projection.thread.pinOrderKey ?? null,
     ...(projection.thread.tags?.length ? { tags: projection.thread.tags } : {}),
     lastVisitedAt: projection.thread.lastVisitedAt,
@@ -2345,6 +2352,7 @@ function shellFromState(input: {
     pinnedAt: input.state.thread.pinnedAt ?? null,
 
     autoSettleDisabledAt: input.state.thread.autoSettleDisabledAt ?? null,
+    ...(input.state.thread.space === undefined ? {} : { space: input.state.thread.space }),
     pinOrderKey: input.state.thread.pinOrderKey ?? null,
     ...(input.state.thread.tags?.length ? { tags: input.state.thread.tags } : {}),
     lastVisitedAt: input.state.thread.lastVisitedAt,
@@ -9758,6 +9766,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
         readonly settled_override: string | null;
         readonly settled_at: string | null;
         readonly snoozed_until: string | null;
+        readonly space: string | null;
       }>`
         SELECT
           t.thread_id,
@@ -9774,7 +9783,8 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
           json_extract(t.payload_json, '$.delegatedFrom.title') AS delegated_from_title,
           json_extract(t.payload_json, '$.settledOverride') AS settled_override,
           json_extract(t.payload_json, '$.settledAt') AS settled_at,
-          json_extract(t.payload_json, '$.snoozedUntil') AS snoozed_until
+          json_extract(t.payload_json, '$.snoozedUntil') AS snoozed_until,
+          json_extract(t.payload_json, '$.space') AS space
         FROM orchestration_v2_projection_threads t
         WHERE t.deleted_at IS NULL
           AND t.archived_at IS NULL${projectId === undefined ? sql`` : sql` AND t.project_id = ${projectId}`}
@@ -9802,6 +9812,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
             : null,
         settledAt: row.settled_at === null ? null : DateTime.makeUnsafe(row.settled_at),
         snoozedUntil: row.snoozed_until === null ? null : DateTime.makeUnsafe(row.snoozed_until),
+        ...(row.space === "support" || row.space === "development" ? { space: row.space } : {}),
         updatedAt: DateTime.makeUnsafe(row.updated_at),
       }));
     }, Effect.mapError(shellSnapshotReadError));
