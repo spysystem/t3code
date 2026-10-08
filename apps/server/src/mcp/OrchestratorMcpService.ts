@@ -874,6 +874,7 @@ function listItemFromShell(
     interactionMode: shell.interactionMode,
     linkedPullRequest: shell.linkedPullRequest ?? null,
     pullRequests: threadPullRequests(shell.pullRequests),
+    space: shell.space ?? "development",
     ...threadSettlement(shell),
     ...threadSnooze(shell, nowMs),
     parentThreadId: shell.lineage.parentThreadId,
@@ -2591,6 +2592,7 @@ const make = Effect.gen(function* () {
                   commandId,
                   threadId,
                   projectId: parent.thread.projectId,
+                  ...(parent.thread.space === undefined ? {} : { space: parent.thread.space }),
                   title,
                   modelSelection: target.modelSelection,
                   runtimeMode,
@@ -2712,6 +2714,9 @@ const make = Effect.gen(function* () {
         )
         .filter(
           (thread) => input.snoozed === undefined || isSnoozed(thread, nowMs) === input.snoozed,
+        )
+        .filter(
+          (thread) => input.space === undefined || (thread.space ?? "development") === input.space,
         )
         .filter(
           (thread) =>

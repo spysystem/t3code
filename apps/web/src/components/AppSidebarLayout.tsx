@@ -38,6 +38,7 @@ import {
   usePanelNavigationSuppression,
 } from "../panelAnimations";
 import LegacyThreadSidebar from "./LegacySidebar";
+import { useFollowRouteThreadSpace } from "./sidebar/useFollowRouteThreadSpace";
 import { useThreadVisitedMigration } from "../hooks/useThreadVisitedMigration";
 import ThreadSidebar from "./Sidebar";
 import { SettingsSidebarNav } from "./settings/SettingsSidebarNav";
@@ -335,6 +336,7 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
     observedKey: null,
     pendingKey: null,
   }));
+  useFollowRouteThreadSpace();
   const { active: panelAnimationsActive, durationMs: panelAnimationDurationMs } =
     usePanelAnimationSettings();
   useThreadVisitedMigration();

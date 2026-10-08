@@ -92,6 +92,7 @@ import { useSidebarPendingFileDropStore } from "../sidebarPendingFileDropStore";
 import { makeWorkspaceFileDropHandlers } from "./chat/workspaceFileDrop";
 import {
   readEnvironmentSupportsSettlement,
+  readEnvironmentSupportsSpaces,
   readThreadShell,
   useProjects,
   useServerConfigs,
@@ -213,6 +214,8 @@ import { sortThreads } from "../lib/threadSort";
 import { sortSettledThreads } from "@t3tools/client-runtime/state/thread-sort";
 import { SidebarChromeFooter, SidebarChromeHeader } from "./sidebar/SidebarChrome";
 import { SidebarUsageSummary } from "./sidebar/SidebarUsageSummary";
+import { SidebarSpaceSwitch } from "./sidebar/SidebarSpaceSwitch";
+import { otherThreadSpace, threadSpaceOf, useSidebarSpace } from "../threadSpace";
 import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
 import { useCopyNativeThreadId } from "~/hooks/useCopyNativeThreadId";
 import { readEnvironmentSupportsNativeThreadId } from "../state/entities";
@@ -1218,6 +1221,7 @@ interface SidebarProjectItemProps {
   archiveThread: ReturnType<typeof useThreadActions>["archiveThread"];
   settleThread: ReturnType<typeof useThreadActions>["settleThread"];
   unsettleThread: ReturnType<typeof useThreadActions>["unsettleThread"];
+  setThreadSpace: ReturnType<typeof useThreadActions>["setThreadSpace"];
   deleteThread: ReturnType<typeof useThreadActions>["deleteThread"];
   markThreadUnread: ReturnType<typeof useThreadActions>["markThreadUnread"];
   threadJumpLabelByKey: ReadonlyMap<string, string>;
@@ -1266,7 +1270,10 @@ function useProjectThreads(
   const threadSortOrder = useClientSettings<SidebarThreadSortOrder>(
     (settings) => settings.sidebarThreadSortOrder,
   );
-  const sidebarThreads = useThreadShellsForProjectRefs(project.memberProjectRefs);
+  const sidebarSpace = useSidebarSpace();
+  const sidebarThreads = useThreadShellsForProjectRefs(project.memberProjectRefs).filter(
+    (thread) => threadSpaceOf(thread) === sidebarSpace,
+  );
   const threadLastVisitedAts = useUiStateStore(
     useShallow((state) =>
       sidebarThreads.map(
@@ -1443,6 +1450,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
     archiveThread,
     settleThread,
     unsettleThread,
+    setThreadSpace,
     deleteThread,
     markThreadUnread,
     threadJumpLabelByKey,
@@ -2392,6 +2400,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
       );
       const settlementSupported = readEnvironmentSupportsSettlement(thread.environmentId);
       const isSettled = isLegacySidebarThreadSettled(thread, settlementSupported);
+      const space = threadSpaceOf(thread);
       const clicked = await api.contextMenu.show(
         [
           ...(thread.branch
@@ -2408,6 +2417,15 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
               ]
             : []),
           { id: "mark-unread", label: "Mark unread" },
+          ...(readEnvironmentSupportsSpaces(thread.environmentId)
+            ? [
+                {
+                  id: "move-space",
+                  label: space === "support" ? "Move to Development" : "Move to Dev support",
+                  disabled: !canOperateThread,
+                },
+              ]
+            : []),
           { id: "copy-path", label: "Copy Path" },
           { id: "copy-thread-id", label: "Copy T3 thread ID" },
           ...(readEnvironmentSupportsNativeThreadId(thread.environmentId)
@@ -2467,6 +2485,21 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
       }
       if (clicked === "unsettle") {
         await attemptUnsettleThread(threadRef);
+        return;
+      }
+      if (clicked === "move-space") {
+        if (!checkTaskPermission(threadRef.environmentId)) return;
+        const result = await setThreadSpace(threadRef, otherThreadSpace(space));
+        if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+          const error = squashAtomCommandFailure(result);
+          toastManager.add(
+            stackedThreadToast({
+              type: "error",
+              title: "Failed to move thread",
+              description: error instanceof Error ? error.message : "An error occurred.",
+            }),
+          );
+        }
         return;
       }
 
@@ -3059,6 +3092,7 @@ interface SidebarProjectsContentProps {
   archiveThread: ReturnType<typeof useThreadActions>["archiveThread"];
   settleThread: ReturnType<typeof useThreadActions>["settleThread"];
   unsettleThread: ReturnType<typeof useThreadActions>["unsettleThread"];
+  setThreadSpace: ReturnType<typeof useThreadActions>["setThreadSpace"];
   deleteThread: ReturnType<typeof useThreadActions>["deleteThread"];
   markThreadUnread: ReturnType<typeof useThreadActions>["markThreadUnread"];
   sortedProjects: readonly SidebarProjectSnapshot[];
@@ -3104,6 +3138,7 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
     archiveThread,
     settleThread,
     unsettleThread,
+    setThreadSpace,
     deleteThread,
     markThreadUnread,
     sortedProjects,
@@ -3139,6 +3174,7 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
     <SidebarContent
       fixedHeader={
         <SidebarGroup className="z-[1]">
+          <SidebarSpaceSwitch />
           <SidebarMenu>
             <SidebarMenuItem>
               <CommandDialogTrigger
@@ -3237,6 +3273,7 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
                         archiveThread={archiveThread}
                         settleThread={settleThread}
                         unsettleThread={unsettleThread}
+                        setThreadSpace={setThreadSpace}
                         deleteThread={deleteThread}
                         markThreadUnread={markThreadUnread}
                         threadJumpLabelByKey={threadJumpLabelByKey}
@@ -3273,6 +3310,7 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
                 archiveThread={archiveThread}
                 settleThread={settleThread}
                 unsettleThread={unsettleThread}
+                setThreadSpace={setThreadSpace}
                 deleteThread={deleteThread}
                 markThreadUnread={markThreadUnread}
                 threadJumpLabelByKey={threadJumpLabelByKey}
@@ -3386,7 +3424,10 @@ function useSortedLegacySidebarProjects(input: {
     projectPhysicalKeyByScopedRef,
     sidebarProjectSortOrder,
   } = input;
-  const sidebarThreads = useThreadShells();
+  const sidebarSpace = useSidebarSpace();
+  const sidebarThreads = useThreadShells().filter(
+    (thread) => threadSpaceOf(thread) === sidebarSpace,
+  );
   const sidebarProjectByKey = new Map(
     sidebarProjects.map((project) => [project.projectKey, project] as const),
   );
@@ -3436,7 +3477,10 @@ function useLegacySidebarThreads(input: {
     sidebarThreadPreviewCount,
     expandedThreadListsByProject,
   } = input;
-  const sidebarThreads = useThreadShells();
+  const sidebarSpace = useSidebarSpace();
+  const sidebarThreads = useThreadShells().filter(
+    (thread) => threadSpaceOf(thread) === sidebarSpace,
+  );
   const serverConfigs = useServerConfigs();
   const projectExpandedById = useUiStateStore((store) => store.projectExpandedById);
   const sidebarThreadByKey = new Map(
@@ -3547,8 +3591,14 @@ export default function LegacySidebar({ routeReveal }: { routeReveal: SidebarRou
   const sidebarProjectSortOrder = useClientSettings((s) => s.sidebarProjectSortOrder);
   const sidebarThreadPreviewCount = useClientSettings((s) => s.sidebarThreadPreviewCount);
   const handleNewThread = useNewThreadHandler();
-  const { archiveThread, settleThread, unsettleThread, deleteThread, markThreadUnread } =
-    useThreadActions();
+  const {
+    archiveThread,
+    settleThread,
+    unsettleThread,
+    setThreadSpace,
+    deleteThread,
+    markThreadUnread,
+  } = useThreadActions();
   const { isMobile, setOpenMobile } = useSidebar();
   const routeTarget = useThreadRouteTarget();
   const routeDraftThread = useComposerDraftStore((store) =>
@@ -3963,6 +4013,7 @@ export default function LegacySidebar({ routeReveal }: { routeReveal: SidebarRou
         archiveThread={archiveThread}
         settleThread={settleThread}
         unsettleThread={unsettleThread}
+        setThreadSpace={setThreadSpace}
         deleteThread={deleteThread}
         markThreadUnread={markThreadUnread}
         sortedProjects={sortedProjects}

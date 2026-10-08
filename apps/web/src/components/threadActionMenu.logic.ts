@@ -1,4 +1,4 @@
-import type { ContextMenuItem } from "@t3tools/contracts";
+import type { ContextMenuItem, OrchestrationV2ThreadSpace } from "@t3tools/contracts";
 import type { SnoozePreset } from "@t3tools/client-runtime/state/thread-settled";
 
 export type ThreadActionMenuId =
@@ -18,6 +18,7 @@ export type ThreadActionMenuId =
   | "rename"
   | "regenerate-title"
   | "mark-unread"
+  | "move-space"
   | "copy"
   | "copy-path"
   | "copy-branch"
@@ -79,6 +80,7 @@ export interface ThreadActionMenuState {
   readonly isRegeneratingTitle: boolean;
   /** Archive rejects a thread with an attached provider, so disable it here rather than let the action fail. */
   readonly isRunning: boolean;
+  readonly space: OrchestrationV2ThreadSpace;
   readonly supports: {
     readonly settlement: boolean;
     readonly autoSettleOptOut: boolean;
@@ -86,6 +88,8 @@ export interface ThreadActionMenuState {
     readonly pinning: boolean;
     readonly titleRegeneration: boolean;
     readonly nativeThreadId?: boolean;
+    /** Server stores thread spaces. */
+    readonly spaces: boolean;
   };
   readonly snoozePresets: ReadonlyArray<SnoozePreset>;
 }
@@ -161,6 +165,15 @@ export function buildThreadActionMenuItems(
         ]
       : []),
     { id: "mark-unread", label: "Mark unread", icon: "mail-open" },
+    ...(state.supports.spaces
+      ? [
+          {
+            id: "move-space" as const,
+            label: state.space === "support" ? "Move to Development" : "Move to Dev support",
+            icon: "arrow-right-left",
+          },
+        ]
+      : []),
     ...(state.projectFilter
       ? [
           {

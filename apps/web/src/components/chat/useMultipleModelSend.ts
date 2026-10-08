@@ -1,6 +1,7 @@
 import {
   type EnvironmentId,
   type ModelSelection,
+  type OrchestrationV2ThreadSpace,
   type RuntimeMode,
   type ThreadId,
 } from "@t3tools/contracts";
@@ -87,6 +88,7 @@ export function useMultipleModelSend(input: MultipleModelSendInput) {
   return async ({
     threadId,
     project,
+    space,
     branch,
     selections,
     targets,
@@ -100,6 +102,7 @@ export function useMultipleModelSend(input: MultipleModelSendInput) {
   }: {
     readonly threadId: ThreadId;
     readonly project: EnvironmentProject;
+    readonly space: OrchestrationV2ThreadSpace;
     readonly branch: string;
     readonly selections: ReadonlyArray<ModelSelection>;
     readonly targets: ReadonlyArray<MultipleModelTarget>;
@@ -183,6 +186,7 @@ export function useMultipleModelSend(input: MultipleModelSendInput) {
                   bootstrap: {
                     createThread: {
                       projectId: project.id,
+                      space,
                       title,
                       modelSelection: target.selection,
                       runtimeMode,

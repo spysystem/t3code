@@ -12,6 +12,7 @@ import {
   AuthSourceControlWriteScope,
   EnvironmentAuthorizationError,
   EnvironmentId,
+  type OrchestrationV2ThreadSpace,
   type ScopedThreadRef,
   ThreadId,
   sessionGrantsScope,
@@ -49,6 +50,7 @@ import {
 } from "../state/entities";
 import { useUiStateStore } from "../uiStateStore";
 import { clearThreadPreviewState } from "../previewStateStore";
+import { THREAD_SPACE_LABELS } from "../threadSpace";
 import { useTerminalUiStateStore } from "../terminalUiStateStore";
 import { buildThreadRouteParams, resolveThreadRouteRef } from "../threadRoutes";
 import { formatWorktreePathForDisplay, getOrphanedWorktreePathForThread } from "../worktreeCleanup";
@@ -270,6 +272,9 @@ export function useThreadActions() {
   const setThreadAutoSettleMutation = useOrchestrationCommand(threadEnvironment.setAutoSettle, {
     reportFailure: false,
   });
+  const setThreadSpaceMutation = useOrchestrationCommand(threadEnvironment.setSpace, {
+    reportFailure: false,
+  });
   const reorderPinnedThreadMutation = useOrchestrationCommand(threadEnvironment.reorderPin, {
     reportFailure: false,
   });
@@ -318,6 +323,23 @@ export function useThreadActions() {
   const getCurrentRouteThreadRef = () => {
     const currentRouteParams = router.state.matches[router.state.matches.length - 1]?.params ?? {};
     return resolveThreadRouteRef(currentRouteParams);
+  };
+
+  /** Moves a thread between the Development and Dev support spaces. */
+  const setThreadSpace = async (target: ScopedThreadRef, space: OrchestrationV2ThreadSpace) => {
+    const result = await setThreadSpaceMutation({
+      environmentId: target.environmentId,
+      input: { threadId: target.threadId, space },
+    });
+    if (result._tag !== "Success") return result;
+    // The open thread takes the sidebar with it; otherwise the thread on
+    // screen would vanish from the list the user is looking at.
+    const routeThreadRef = getCurrentRouteThreadRef();
+    if (routeThreadRef && scopedThreadKey(routeThreadRef) === scopedThreadKey(target)) {
+      useUiStateStore.getState().setSidebarSpace(space);
+    }
+    toastManager.add({ type: "success", title: `Moved to ${THREAD_SPACE_LABELS[space]}` });
+    return result;
   };
 
   const unarchiveThread = async (target: ScopedThreadRef, opts: { navigate?: boolean } = {}) => {
@@ -914,5 +936,6 @@ export function useThreadActions() {
     reorderActiveThread,
     markThreadUnread,
     setThreadAutoSettle,
+    setThreadSpace,
   };
 }

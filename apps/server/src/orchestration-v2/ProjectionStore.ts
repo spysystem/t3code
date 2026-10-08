@@ -58,6 +58,7 @@ import {
   OrchestrationV2RuntimeRequestJson as OrchestrationV2RuntimeRequestJsonSchema,
   OrchestrationV2SubagentJson as OrchestrationV2SubagentJsonSchema,
   OrchestrationV2TurnItemJson as OrchestrationV2TurnItemJsonSchema,
+  isOrchestrationV2ThreadSpaceMove,
   orchestrationV2RunWorkStartedAt,
   RunId,
   MessageId,
@@ -791,7 +792,6 @@ export function applyToProjection(
     case "thread.pinned":
     case "thread.unpinned":
     case "thread.pin-reordered":
-    case "thread.metadata-updated":
     case "thread.runtime-mode-updated":
     case "thread.interaction-mode-updated":
     case "thread.model-selection-updated":
@@ -807,6 +807,11 @@ export function applyToProjection(
         ...base,
         thread: event.payload,
         updatedAt: event.payload.updatedAt,
+      };
+    case "thread.metadata-updated":
+      return {
+        ...(isOrchestrationV2ThreadSpaceMove(projection.thread, event.payload) ? projection : base),
+        thread: event.payload,
       };
     case "thread.visited":
     case "thread.marked-unread":
@@ -1656,6 +1661,7 @@ export function threadShellFromProjection(
     pinnedAt: projection.thread.pinnedAt ?? null,
 
     autoSettleDisabledAt: projection.thread.autoSettleDisabledAt ?? null,
+    ...(projection.thread.space === undefined ? {} : { space: projection.thread.space }),
     pinOrderKey: projection.thread.pinOrderKey ?? null,
     lastVisitedAt: projection.thread.lastVisitedAt,
     titleRegeneration: projection.thread.titleRegeneration ?? null,
@@ -1899,6 +1905,7 @@ function shellFromState(input: {
     pinnedAt: input.state.thread.pinnedAt ?? null,
 
     autoSettleDisabledAt: input.state.thread.autoSettleDisabledAt ?? null,
+    ...(input.state.thread.space === undefined ? {} : { space: input.state.thread.space }),
     pinOrderKey: input.state.thread.pinOrderKey ?? null,
     lastVisitedAt: input.state.thread.lastVisitedAt,
     titleRegeneration: input.state.thread.titleRegeneration ?? null,

@@ -2003,6 +2003,7 @@ export const layerWsRpc = (
                       ? {}
                       : { reuseExistingThread: input.reuseExistingThread }),
                     projectId: input.projectId,
+                    ...(input.space === undefined ? {} : { space: input.space }),
                     title: input.title,
                     ...(input.generateTitle === undefined
                       ? {}
