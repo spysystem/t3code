@@ -39,6 +39,7 @@ import {
   OrchestrationV2Actor,
   OrchestrationV2CreationSource,
   OrchestrationV2DelegatedFrom,
+  OrchestrationV2ThreadSpace,
   OrchestrationV2RunStatus,
   OrchestrationV2TurnItemStatus,
 } from "./orchestrationV2.ts";
@@ -364,6 +365,11 @@ export const OrchestratorMcpThreadListInput = Schema.Struct({
   titleContains: Schema.optional(TrimmedNonEmptyString.check(Schema.isMaxLength(256))),
   settled: Schema.optional(Schema.Boolean),
   snoozed: Schema.optional(Schema.Boolean),
+  space: Schema.optional(
+    OrchestrationV2ThreadSpace.annotate({
+      description: 'Only threads in this space: "development" or "support" (Dev support).',
+    }),
+  ),
   includeSubagents: Schema.optional(Schema.Boolean),
   cursor: Schema.optional(NonNegativeInt),
   limit: Schema.optional(clampedPositiveInt(100)),
@@ -410,6 +416,7 @@ export const OrchestratorMcpThreadListItem = Schema.Struct({
   pullRequests: Schema.optional(Schema.Array(OrchestratorMcpThreadPullRequest)),
   pullRequestCount: Schema.optional(NonNegativeInt),
   openPullRequestCount: Schema.optional(NonNegativeInt),
+  space: OrchestrationV2ThreadSpace,
   settled: Schema.Boolean,
   settledAt: Schema.NullOr(IsoDateTime),
   snoozed: Schema.Boolean,
