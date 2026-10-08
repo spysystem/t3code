@@ -12220,5 +12220,18 @@
   "6baf10f050ffa6e8": "Move to Dev support",
   "f1836c49140bef04": "Moved to {space}",
   "ef9a8200316ed44b": "Thread space",
-  "3fb2c7b83bab7ea3": "{count} waiting in {space}"
+  "3fb2c7b83bab7ea3": "{count} waiting in {space}",
+  "85065f6dac9293e8": "Start from ticket…",
+  "b5ee5be0329cb81d": "Enter a task number, for example {example}.",
+  "03382f2a205a9996": "Opened the existing thread for #{taskId}",
+  "93c94a8e676fba6f": "Choose a project.",
+  "5b48e9be3cd86ce6": "No model is available in that project's environment.",
+  "b96bf6bcca860556": "Could not start the thread.",
+  "1e12416935f91db0": "Started #{taskId}",
+  "aacc79e98e1a7d86": "It will appear under Dev support in a moment.",
+  "16f4a4334f9cae97": "Start thread",
+  "14cca3435ebed117": "Start from ticket",
+  "42784fc645b82bd6": "Opens the ticket's Dev support thread, or starts one that runs the ticket investigation skill.",
+  "8d15bd7c3dcfe3ab": "Task number",
+  "1dad79c8e26dbd51": "Start from ticket"
 }
