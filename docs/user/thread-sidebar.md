@@ -61,6 +61,15 @@ example from a notification, switches the sidebar to that space.
 The switch appears once a connected environment supports spaces. Mobile lists threads
 from both spaces together.
 
+### Start from a ticket
+
+In **Dev support**, press **Start from ticket**, or pick it from the command palette.
+Enter the task number, then choose a project and model. If a Dev support thread already
+mentions `#<number>` in its title, T3 Code opens that thread instead. Otherwise it starts
+a thread in the project's checkout that runs your team's ticket investigation skill. A
+thread whose first message runs that skill lands in Dev support from any client or
+agent, not only from this dialog.
+
 ## Pin and reorder threads
 
 Pin a thread from its menu to keep it above your active work.
