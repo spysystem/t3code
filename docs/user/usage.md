@@ -33,6 +33,7 @@ Usage aggregates history across Codex, Claude Code, Grok Build, OpenCode, Antigr
 
 - **In chat**: Run `/usage-limits` in the composer to view the current model's snapshot without running the agent, or enable **Settings → Appearance → Thread details → Usage limits** (web/desktop).
 - **Workday pacing**: On web and desktop, choose **Pace → Workdays (Mon–Fri)** to budget weekly limits across weekdays. Even-pace marks and the pace verdict then skip weekends in your local timezone, following each account's reset window; weekend usage still counts. The choice is remembered on this device and also applies to the composer's limits panel. Choose **All days** to pace across the full week.
+- **Usage in sidebar** (web/desktop): Turn on **Settings → General → Usage in sidebar** to keep each provider's remaining quota in a small box under the sidebar's search. Hover a bar for its next reset, and click the box to open **Usage → Limits**. The box shows the last readings and never checks the providers itself.
 - **Reset credits**: Click an account segment/row to inspect plan details and redeem banked Codex/Claude reset credits via **Use reset** (Claude resets unavailable on macOS Keychain logins).
 - **Provider notes**:
   - **OpenCode**: OpenCode 2 servers with usage reporting show Go allowances and Console budgets for the connected workspace. Local servers can also report Go usage from a Go API key (`OPENCODE_API_KEY`).
