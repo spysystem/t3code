@@ -32,6 +32,8 @@ export const T3_CODE_BROWSER_TOOL_INSTRUCTIONS = `
 ## T3 Code browser
 
 When browser work was asked, \`preview_*\` is the browser you share with the user: \`preview_status\` first, then \`preview_open\` if no tab can be automated. Prefer snapshot locators over coordinates. Switch browsers only if the tools are absent or \`preview_open\` says unsupported, the user asks, or two preview calls fail on one step. Then quote the error and switch.
+
+Use Chrome DevTools MCP for diagnostics the preview lacks, such as performance traces or heap snapshots. T3 preview, Chrome DevTools MCP, and the OpenAI Browser plugin are separate connections: one failing, such as the Browser plugin's empty list or unavailable \`iab\` backend, says nothing about the others. Report which connection failed.
 `;
 
 // ACP only: some ACP agents accept the injected MCP server but never expose
