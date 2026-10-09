@@ -50,6 +50,9 @@ Do not switch to global browser skills, Chrome, Node REPL browser automation, st
 - the T3 preview tools are absent, or \`preview_open\` returns an explicit unsupported/unavailable error;
 - the user asks for another browser, or invokes a skill or documented repository workflow that names one; follow that workflow and report any prerequisite it is missing;
 - preview calls on an open tab have failed twice on the same step (timeouts, \`chrome-error://\` pages, a different client answering). Quote the raw error and switch without asking the user which browser to use.
+- the task needs diagnostics the preview does not provide, such as performance traces or heap snapshots; use Chrome DevTools MCP for these.
+
+T3 preview, Chrome DevTools MCP, and the OpenAI Browser plugin are separate browser connections. The OpenAI Browser plugin's empty browser list or unavailable \`iab\` backend does not establish whether T3 preview or Chrome DevTools MCP works. For T3's built-in browser, use \`preview_*\` directly; global Browser skills that require their own browser-client runtime describe a different connection. Keep each browser's tabs and login state separate, and report which connection failed rather than declaring all browser access unavailable.
 `;
 
 const T3_CODE_ACP_DEFAULT_MODE_INSTRUCTIONS = `## T3 Code interaction mode: Default
