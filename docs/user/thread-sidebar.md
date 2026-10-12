@@ -256,6 +256,9 @@ retry and the normal snooze choices.
 
 On web and desktop, use **Agents** to follow work delegated to subagents.
 Stop on a thread also stops the subagents it delegated to.
+With **Sidebar (legacy)** turned on, subagents that are still working fold into a
+**Subagents** section under their thread instead of appearing as separate threads.
+Finished subagents leave the sidebar; open them from the thread's **Lineage** details.
 
 Subagent threads started by the agent can't take messages; message the parent
 thread instead. When such a subagent needs an approval or an answer, the parent
