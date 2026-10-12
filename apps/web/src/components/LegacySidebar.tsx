@@ -1109,6 +1109,7 @@ interface SidebarProjectThreadListProps {
   hasMoreSettledThreads: boolean;
   toggleSettledList: () => void;
   showMoreSettledThreads: () => void;
+  archiveSettledThreads: () => Promise<void>;
   attemptSettleThread: (threadRef: ScopedThreadRef) => Promise<void>;
   attemptUnsettleThread: (threadRef: ScopedThreadRef) => Promise<void>;
 }
@@ -1160,6 +1161,7 @@ const SidebarProjectThreadList = memo(function SidebarProjectThreadList(
     hasMoreSettledThreads,
     toggleSettledList,
     showMoreSettledThreads,
+    archiveSettledThreads,
     attemptSettleThread,
     attemptUnsettleThread,
   } = props;
@@ -1276,8 +1278,29 @@ const SidebarProjectThreadList = memo(function SidebarProjectThreadList(
               )}
             />
             <span className="flex-1">Settled</span>
-            <span className="text-3xs tabular-nums">{settledThreadCount}</span>
+            <span className="text-3xs tabular-nums transition-opacity duration-150 group-hover/menu-sub-item:opacity-0 group-focus-within/menu-sub-item:opacity-0 max-sm:pr-6">
+              {settledThreadCount}
+            </span>
           </SidebarMenuSubButton>
+          <div className="pointer-events-none absolute top-1/2 right-0.5 flex -translate-y-1/2 items-center opacity-0 transition-opacity duration-150 max-sm:pointer-events-auto max-sm:opacity-100 group-hover/menu-sub-item:pointer-events-auto group-hover/menu-sub-item:opacity-100 group-focus-within/menu-sub-item:pointer-events-auto group-focus-within/menu-sub-item:opacity-100">
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <button
+                    type="button"
+                    data-thread-selection-safe
+                    data-testid={`project-settled-archive-${projectKey}`}
+                    aria-label="Archive all settled threads"
+                    className={SIDEBAR_ICON_ACTION_BUTTON_CLASS}
+                    onClick={() => void archiveSettledThreads()}
+                  />
+                }
+              >
+                <ArchiveIcon className="size-3.5" />
+              </TooltipTrigger>
+              <TooltipPopup side="top">Archive all settled</TooltipPopup>
+            </Tooltip>
+          </div>
         </SidebarMenuSubItem>
       )}
       {renderedSettledThreads.map(renderThreadRow)}
@@ -2423,6 +2446,51 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
     },
     [unsettleThread],
   );
+  // Settled threads that are still running cannot be archived, so they stay put.
+  const archiveSettledThreads = useCallback(async () => {
+    const api = readLocalApi();
+    if (!api) return;
+    const entries = settledProjectThreads.flatMap((thread) => {
+      if (!threadRuntimeCanArchive(thread.runtime)) return [];
+      const threadRef = scopeThreadRef(thread.environmentId, thread.id);
+      return [{ threadKey: scopedThreadKey(threadRef), threadRef }];
+    });
+    if (entries.length === 0) return;
+    if (!entries.every(({ threadRef }) => checkTaskPermission(threadRef.environmentId))) return;
+    const confirmed = await api.dialogs.confirm(
+      `Archive ${entries.length} settled thread${entries.length === 1 ? "" : "s"}?`,
+    );
+    if (!confirmed) return;
+
+    const archiveOutcome = await archiveSelectedThreadEntries({
+      entries,
+      archive: ({ threadRef }, onArchived) => archiveThread(threadRef, { onArchived }),
+    });
+    for (const failure of archiveOutcome.followupFailures) {
+      if (isAtomCommandInterrupted(failure)) continue;
+      const error = squashAtomCommandFailure(failure);
+      toastManager.add(
+        stackedThreadToast({
+          type: "error",
+          title: "Thread archived, but navigation failed",
+          description: error instanceof Error ? error.message : "An error occurred.",
+        }),
+      );
+    }
+    if (
+      archiveOutcome.mutationFailure &&
+      !isAtomCommandInterrupted(archiveOutcome.mutationFailure)
+    ) {
+      const error = squashAtomCommandFailure(archiveOutcome.mutationFailure);
+      toastManager.add(
+        stackedThreadToast({
+          type: "error",
+          title: "Failed to archive threads",
+          description: error instanceof Error ? error.message : "An error occurred.",
+        }),
+      );
+    }
+  }, [archiveThread, settledProjectThreads]);
 
   const cancelRename = useCallback(() => {
     setRenamingThreadKey(null);
@@ -2906,6 +2974,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
         hasMoreSettledThreads={settledVisibleCount < settledProjectThreads.length}
         toggleSettledList={toggleSettledList}
         showMoreSettledThreads={showMoreSettledThreads}
+        archiveSettledThreads={archiveSettledThreads}
         attemptSettleThread={attemptSettleThread}
         attemptUnsettleThread={attemptUnsettleThread}
       />

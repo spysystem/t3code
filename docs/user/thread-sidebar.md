@@ -163,7 +163,9 @@ runs a command, such as a dev server, stays open.
 
 With **Sidebar (legacy)** turned on in **Settings → General → Legacy features**, hover a
 thread and press its check button to settle it. Settled threads collect in a folded
-**Settled** section at the bottom of their project.
+**Settled** section at the bottom of their project. Hover the section header and press its
+archive button to archive all of that project's settled threads at once; threads that are
+still running stay settled.
 
 To reclaim disk space from settled work, turn on **Run in the thread's worktree when the
 thread settles** for one of the project's actions, or set `"runOnSettle": true` on a
