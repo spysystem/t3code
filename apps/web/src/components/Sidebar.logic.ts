@@ -1161,6 +1161,13 @@ export function formatWorkingDurationLabel(elapsedMs: number): string {
   return `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
 }
 
+export const WORKING_THREAD_STATUS_PILL: ThreadStatusPill = {
+  label: "Working",
+  colorClass: "text-sky-600 dark:text-sky-300/80",
+  dotClass: "bg-sky-500 dark:bg-sky-300/80",
+  pulse: true,
+};
+
 export function resolveThreadStatusPill(input: {
   thread: ThreadStatusInput;
 }): ThreadStatusPill | null {
@@ -1185,12 +1192,7 @@ export function resolveThreadStatusPill(input: {
   }
 
   if (thread.runtime?.status === "running" || thread.runtime?.status === "waiting") {
-    return {
-      label: "Working",
-      colorClass: "text-sky-600 dark:text-sky-300/80",
-      dotClass: "bg-sky-500 dark:bg-sky-300/80",
-      pulse: true,
-    };
+    return WORKING_THREAD_STATUS_PILL;
   }
 
   if (
