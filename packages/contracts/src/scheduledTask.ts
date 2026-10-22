@@ -26,12 +26,44 @@ export const MIN_SCHEDULED_TASK_INTERVAL_MS = 60_000;
 
 const ScheduledTaskIntervalMs = Schema.Int.check(Schema.isGreaterThan(0));
 
+export const DEFAULT_SCHEDULED_TASK_GATE_TIMEOUT_MS = 60_000;
+export const MAX_SCHEDULED_TASK_GATE_TIMEOUT_MS = 300_000;
+/** In UTF-16 code units, as JavaScript's string `length` counts them. */
+export const SCHEDULED_TASK_GATE_OUTPUT_LIMIT = 20_000;
+
+export const ScheduledTaskGate = Schema.Struct({
+  command: TrimmedNonEmptyString.annotate({
+    description:
+      "Shell command run in the project folder, with the server's environment. Name its tools by absolute path outside the project folder.",
+  }),
+  timeoutMs: Schema.optional(
+    Schema.Int.check(
+      Schema.isBetween({ minimum: 1_000, maximum: MAX_SCHEDULED_TASK_GATE_TIMEOUT_MS }),
+    ).annotate({
+      description: `Kill the command after this many milliseconds; default ${DEFAULT_SCHEDULED_TASK_GATE_TIMEOUT_MS}, at most ${MAX_SCHEDULED_TASK_GATE_TIMEOUT_MS}.`,
+    }),
+  ),
+}).annotate({
+  description:
+    "Check run at each tick before any turn: exit 0 with output starts the turn with it, exit 0 without output skips the tick, any other exit or a timeout fails it.",
+});
+export type ScheduledTaskGate = typeof ScheduledTaskGate.Type;
+
+const ScheduledTaskGateField = { gate: Schema.optional(ScheduledTaskGate) };
+
+const ScheduledTaskUpsertGateField = {
+  gate: Schema.optional(Schema.NullOr(ScheduledTaskGate)).annotate({
+    description: "Omit to keep the stored gate; null removes it.",
+  }),
+};
+
 const ScheduledTaskIntervalSchedule = Schema.Struct({
   type: Schema.Literal("interval"),
   everyMs: ScheduledTaskIntervalMs,
+  ...ScheduledTaskGateField,
 });
 
-const ScheduledTaskFixedTimeSchedule = Schema.Struct({
+const ScheduledTaskFixedTimeFields = {
   type: Schema.Literal("fixed_time"),
   timeOfDay: TimeOfDay,
   weekdays: Schema.optional(
@@ -43,6 +75,11 @@ const ScheduledTaskFixedTimeSchedule = Schema.Struct({
       description: "Default: every day.",
     }),
   ),
+};
+
+const ScheduledTaskFixedTimeSchedule = Schema.Struct({
+  ...ScheduledTaskFixedTimeFields,
+  ...ScheduledTaskGateField,
 });
 
 const ISO_WITH_OFFSET =
@@ -165,6 +202,16 @@ const ScheduledTaskWebhookSchedule = Schema.Struct({
   description: "Run on each webhook request.",
 });
 
+// Declared so a gate is rejected rather than silently dropped.
+const ScheduledTaskRejectedGateField = {
+  gate: Schema.optionalKey(
+    Schema.Never.annotate({
+      description: "No gate.",
+      message: "Only interval and fixed-time tasks take a gate.",
+    }),
+  ),
+};
+
 const ScheduledTaskUpsertWebhookSchedule = Schema.Struct({
   type: Schema.Literal("webhook"),
   signature: Schema.optional(
@@ -185,6 +232,7 @@ const ScheduledTaskUpsertWebhookSchedule = Schema.Struct({
   maxDeliveryAgeMinutes: Schema.optional(Schema.NullOr(WebhookMaxDeliveryAgeMinutes)),
   dedupe: Schema.optional(ScheduledTaskWebhookDedupe),
   filters: Schema.optional(ScheduledTaskWebhookFilters),
+  ...ScheduledTaskRejectedGateField,
 }).annotate({
   description:
     "Run per webhook request. Prompt can use {{body.path}}, {{headers.name}}, {{query.name}}, {{body}}, {{request}}.",
@@ -207,9 +255,13 @@ export const ScheduledTaskUpsertSchedule = Schema.Union([
     ).annotate({
       description: "Min 60000.",
     }),
+    ...ScheduledTaskUpsertGateField,
   }),
-  ScheduledTaskFixedTimeSchedule,
-  ScheduledTaskOnceSchedule,
+  Schema.Struct({
+    ...ScheduledTaskFixedTimeFields,
+    ...ScheduledTaskUpsertGateField,
+  }),
+  Schema.Struct({ ...ScheduledTaskOnceSchedule.fields, ...ScheduledTaskRejectedGateField }),
   ScheduledTaskUpsertWebhookSchedule,
 ]);
 export type ScheduledTaskUpsertSchedule = typeof ScheduledTaskUpsertSchedule.Type;
@@ -248,6 +300,8 @@ export const ScheduledTask = Schema.Struct({
   webhook: Schema.optional(ScheduledTaskWebhookEndpoint),
   /** Why the task cannot run regardless of `enabled`, such as a managed policy refusing webhooks. */
   blockedByPolicy: Schema.optionalKey(Schema.String),
+  /** When the gate last ran; a quiet check updates it without a run. */
+  gateCheckedAt: Schema.optional(Schema.NullOr(IsoDateTime)),
 });
 export type ScheduledTask = typeof ScheduledTask.Type;
 
