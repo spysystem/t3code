@@ -51,6 +51,8 @@ import * as ThreadManagementService from "../orchestration-v2/ThreadManagementSe
 import * as SecretRequests from "../secrets/SecretRequests.ts";
 import * as DueHint from "../scheduling/DueHint.ts";
 import * as Scheduler from "../scheduling/Scheduler.ts";
+import * as Gate from "./Gate.ts";
+import * as GateRun from "./GateRun.ts";
 import { isMissedFixedTimeRun, isSameSchedule, nextScheduledRunAt } from "./Schedule.ts";
 import {
   redactHeaders,
@@ -425,6 +427,17 @@ export const layer = Layer.effect(
       ReadonlyMap<ScheduledTaskId, ReadonlyArray<number>>
     >(new Map());
     const activeRuns = yield* Ref.make<ReadonlySet<ScheduledTaskId>>(new Set());
+    const runGate = yield* Gate.ScheduledTaskGateRunner;
+    yield* GateRun.ensureGateStateTable.pipe(
+      Effect.mapError((cause) => taskError("Could not create the gate state table.", { cause })),
+    );
+    const gateScope = yield* Effect.scope;
+    const withGateServices = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
+      effect.pipe(
+        Effect.provideService(SqlClient.SqlClient, sql),
+        Effect.provideService(Crypto.Crypto, crypto),
+        Effect.provideService(Gate.ScheduledTaskGateRunner, runGate),
+      );
     // Notifications re-emit the full list; slow subscribers need only the newest dirty signal.
     const changesPubSub = yield* PubSub.sliding<void>(1);
     const dueTasks = DueHint.make();
@@ -466,10 +479,30 @@ export const layer = Layer.effect(
       ORDER BY created_at DESC, task_id ASC
     `.pipe(NodeSqliteClient.readOnly);
 
+    const withGateCheckedAt = (
+      tasks: ReadonlyArray<ScheduledTask>,
+      checkTimes: ReadonlyMap<string, string | null>,
+    ) =>
+      tasks.map((task) =>
+        checkTimes.has(task.id)
+          ? { ...task, gateCheckedAt: checkTimes.get(task.id) ?? null }
+          : task,
+      );
+
     const listRows = Effect.fn("ScheduledTaskService.listRows")(function* () {
       const rows = yield* selectAllRows();
       const origin = yield* readWebhookOrigin;
-      return yield* Effect.forEach(rows, (row) => decodeRow(row, origin), { concurrency: 1 });
+      const tasks = yield* Effect.forEach(rows, (row) => decodeRow(row, origin), {
+        concurrency: 1,
+      });
+      const checkTimes = yield* withGateServices(GateRun.readGateCheckTimes()).pipe(
+        Effect.catch((cause) =>
+          Effect.logWarning("Could not read scheduled task gate state", { cause }).pipe(
+            Effect.as(new Map<string, string | null>()),
+          ),
+        ),
+      );
+      return withGateCheckedAt(tasks, checkTimes);
     });
 
     const getRows = (id: ScheduledTaskId) =>
@@ -725,6 +758,38 @@ export const layer = Layer.effect(
         ),
     );
 
+    const gateStateError = (taskId: ScheduledTaskId) =>
+      Effect.mapError((cause: unknown) =>
+        isScheduledTaskError(cause)
+          ? cause
+          : taskError("Could not update the schedule task's gate.", { taskId, cause }),
+      );
+
+    const gateHooks: GateRun.GateTickHooks = {
+      findTask,
+      nextRunAt,
+      // The same lifecycle as a run whose dispatch failed, in one transaction
+      // so the list never shows the gate's tick as running.
+      recordFailedRun: (input) =>
+        sql
+          .withTransaction(
+            markRunning(input.id, input.startedAtIso).pipe(
+              Effect.andThen(
+                markCompleted({
+                  id: input.id,
+                  completedAtIso: input.completedAtIso,
+                  nextRunAtIso: input.nextRunAtIso,
+                  status: "failed",
+                  error: input.error,
+                  startedAtIso: input.startedAtIso,
+                }),
+              ),
+            ),
+          )
+          .pipe(gateStateError(input.id)),
+      notifyChanged,
+    };
+
     const runTask = Effect.fn("ScheduledTaskService.runTask")(function* (
       task: ScheduledTask,
       trigger: "scheduled" | "manual" | "webhook",
@@ -752,7 +817,7 @@ export const layer = Layer.effect(
         const startedAtIso = iso(startedAt);
 
         // Re-read stale poll snapshots so deleted, paused or postponed tasks cannot fire.
-        const active = yield* findTask(task.id);
+        let active = yield* findTask(task.id);
         if (active === null) {
           if (webhook !== undefined) {
             return yield* new WebhookDeliverySkipped({
@@ -794,6 +859,20 @@ export const layer = Layer.effect(
           if (reason !== null) return yield* new WebhookDeliverySkipped({ reason });
         }
 
+        // The gate runs inside the reservation, so a slow check cannot
+        // overlap the next tick, and before markRunning, so a check that
+        // starts no turn leaves the run status alone.
+        const gate = Gate.scheduleGate(active.schedule);
+        const gated =
+          gate === undefined || trigger === "webhook"
+            ? undefined
+            : yield* withGateServices(
+                GateRun.checkGate({ task: active, gate, trigger, startedAtIso }, gateHooks),
+              ).pipe(gateStateError(active.id));
+        if (gated?._tag === "settled") return { task: gated.task, threadId: null };
+        // The gate can run for minutes; the turn starts from the task as it is now.
+        if (gated?._tag === "turn") active = gated.task;
+
         if (webhook === undefined) yield* markRunning(active.id, startedAtIso);
         else
           yield* sql
@@ -819,7 +898,7 @@ export const layer = Layer.effect(
         const commandId = CommandId.make(`scheduled-task:${fireKey}`);
         const messageId = MessageId.make(`scheduled-task-message:${fireKey}`);
         // A webhook prompt was rendered from the row when the request arrived.
-        const prompt = webhook?.prompt ?? active.prompt;
+        const prompt = webhook?.prompt ?? gated?.prompt ?? active.prompt;
 
         // A bound thread can move to another project (No project to a project) while
         // this fires. Follow it; one move needs at most two retries. Same ids replay safely.
@@ -892,8 +971,11 @@ export const layer = Layer.effect(
         const runSucceeded = result._tag === "Success";
         if (webhook !== undefined && runSucceeded) yield* Ref.set(webhook.dispatched, true);
         const completedAt = yield* localNow;
-        const lastRunStatus = runSucceeded ? ("succeeded" as const) : ("failed" as const);
-        const lastRunError = runSucceeded ? null : errorMessage(result.cause);
+        // A gate's failure turn leaves the task failed until a check passes.
+        const gateError = gated?.gateError ?? null;
+        const lastRunStatus =
+          runSucceeded && gateError === null ? ("succeeded" as const) : ("failed" as const);
+        const lastRunError = runSucceeded ? gateError : errorMessage(result.cause);
         const threadId = runSucceeded ? result.value : null;
         const current = yield* findTask(task.id);
         const scheduleSource = current ?? task;
@@ -939,6 +1021,16 @@ export const layer = Layer.effect(
                   taskError("Could not record webhook completion.", { taskId: task.id, cause }),
                 ),
               );
+          if (runSucceeded && gateError !== null) {
+            yield* withGateServices(GateRun.markFailureTurnSent(task.id)).pipe(
+              Effect.catch((cause) =>
+                Effect.logWarning("Could not mark a gate failure turn as sent", {
+                  taskId: task.id,
+                  cause,
+                }),
+              ),
+            );
+          }
           yield* notifyChanged;
         }
         return { task: completed, threadId };
@@ -1018,6 +1110,12 @@ export const layer = Layer.effect(
             Effect.catch((cause) =>
               Effect.logWarning("Scheduled task run failed", { taskId: task.id, cause }),
             ),
+            // A gate can run for minutes; the other due tasks must not wait
+            // for it. Its reservation keeps later polls from starting it again.
+            (run) =>
+              Gate.scheduleGate(task.schedule) === undefined
+                ? run
+                : Effect.asVoid(Effect.forkIn(run, gateScope)),
           ),
         { concurrency: 1, discard: true },
       );
@@ -1150,7 +1248,10 @@ export const layer = Layer.effect(
                     : undefined),
               ),
             }
-          : input.schedule;
+          : Gate.resolveTimerSchedule(
+              input.schedule,
+              existingTask === null ? undefined : Gate.scheduleGate(existingTask.schedule),
+            );
       const webhook =
         input.schedule.type === "webhook"
           ? yield* Effect.gen(function* () {
@@ -1220,7 +1321,24 @@ export const layer = Layer.effect(
         lastRunError: existingTask?.lastRunError ?? null,
         runCount: existingTask?.runCount ?? 0,
       };
-      yield* saveTask(task, input.requireExisting === true, webhook);
+      const gateChanged =
+        existingTask !== null &&
+        !Gate.isSameGate(Gate.scheduleGate(existingTask.schedule), Gate.scheduleGate(schedule));
+      yield* sql
+        .withTransaction(
+          saveTask(task, input.requireExisting === true, webhook).pipe(
+            Effect.andThen(
+              gateChanged ? withGateServices(GateRun.resetGateState(id)) : Effect.void,
+            ),
+          ),
+        )
+        .pipe(
+          Effect.mapError((cause) =>
+            isScheduledTaskError(cause)
+              ? cause
+              : taskError("Could not save schedule task.", { taskId: id, cause }),
+          ),
+        );
       yield* notifyChanged;
       return { task: (yield* findTask(id)) ?? task };
     });
