@@ -144,6 +144,36 @@ returns. Leave it off if you don't want request bodies stored outside your
 machine. To skip requests that waited too long, set **Skip requests older
 than** on the task.
 
+## Gated scheduled tasks
+
+An interval or fixed-time task can have a gate: a shell command that decides
+at each tick whether the agent runs at all. Agents in full-access threads that
+are not in plan mode, and full-access MCP clients, set one through
+`schedule_task` or `update_scheduled_task`; the task list shows the command and
+when it last ran. The command runs in the project folder with the server's
+environment (`cmd.exe` on Windows, `/bin/sh` elsewhere) and is stopped after 60
+seconds, or the task's own timeout of up to 5 minutes.
+
+Name the command's programs and scripts by absolute path, outside the project
+folder: agents with lower access can edit files in the project, and a gate runs
+whatever it names there with full access.
+
+- **Exit 0 with output** starts the run. The output replaces `{{gate.output}}`
+  in the prompt, or follows it after a blank line. Longer output is cut at
+  20,000 UTF-16 code units, the length JavaScript's `string.length` reports,
+  so a check that keeps its output under that length is never cut.
+  Like a webhook value, it reaches the agent marked as untrusted data, with
+  `@`, `$` and `/command` mentions broken.
+- **Exit 0 without output** skips the tick. Nothing is posted and the run status
+  stays as it was.
+- **Any other exit, or a timeout,** skips the tick and marks the run failed,
+  showing the end of the command's error output. The third failure in a row
+  starts one run with the error in `{{gate.error}}`, or after the prompt. The
+  task stays marked failed, and no further run comes until the gate succeeds
+  again; if that run could not start, the next failure tries again.
+
+**Run now** also checks the gate first.
+
 ## Defaults and inheritance
 
 General contains the model and workspace for new threads. Integrations controls agent browser

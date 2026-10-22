@@ -101,10 +101,12 @@ import { isSnoozed } from "../orchestration-v2/ThreadSettlementService.ts";
 import { userFacingDispatchErrorMessage } from "../orchestration-v2/UserFacingErrors.ts";
 import * as ProjectService from "../project/ProjectService.ts";
 import * as ProviderRegistry from "../provider/ProviderRegistry.ts";
+import * as ScheduledTaskGate from "../scheduledTasks/Gate.ts";
 import * as ScheduledTaskService from "../scheduledTasks/ScheduledTaskService.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import {
   clientRuntimeModeCeiling,
+  isFullAccess,
   type McpInvocationScope,
   type McpThreadInvocationScope,
   requireThreadScope,
@@ -301,6 +303,8 @@ function scheduledTaskSummary(task: ScheduledTask, mayRun: boolean): Orchestrato
     schedule: task.schedule,
     nextRunAt: task.nextRunAt,
     lastRunStatus: task.lastRunStatus,
+    ...(task.lastRunError === null ? {} : { lastRunError: task.lastRunError }),
+    ...(task.gateCheckedAt == null ? {} : { gateCheckedAt: task.gateCheckedAt }),
     ...(task.webhook?.url == null || !mayRun ? {} : { webhookUrl: task.webhook.url }),
     ...(task.webhook === undefined
       ? {}
@@ -1806,9 +1810,35 @@ const make = Effect.gen(function* () {
     return task;
   });
 
+  /** A gate runs a shell command on this machine at every tick, unattended. */
+  const assertMaySetGate = (
+    limits: {
+      readonly runtimeMode: RuntimeMode;
+      readonly interactionMode: ProviderInteractionMode;
+    },
+    requested: ScheduledTaskUpsertInput["schedule"],
+    stored: ScheduledTask["schedule"] | undefined,
+  ) => {
+    const gate = requested.type === "webhook" ? undefined : requested.gate;
+    return gate == null ||
+      ScheduledTaskGate.isSameGate(
+        gate,
+        stored === undefined ? undefined : ScheduledTaskGate.scheduleGate(stored),
+      ) ||
+      isFullAccess(limits)
+      ? Effect.void
+      : Effect.fail(
+          failure(
+            "capability_denied",
+            "Only a full-access/default calling thread or a full-access client may set a scheduled task's gate, because the gate runs a shell command on this machine.",
+          ),
+        );
+  };
+
   return OrchestratorMcpService.of({
     scheduleTask: Effect.fn("OrchestratorMcpService.scheduleTask")(function* (scope, input) {
       const { parent, limits } = yield* loadCaller(scope);
+      yield* assertMaySetGate(limits, input.schedule, undefined);
       const projectId = yield* resolveProjectTarget(parent, input.projectId);
       yield* assertLiveCallerForOtherProject(scope, parent, projectId);
       const project = yield* requireProject(projectId);
@@ -1886,6 +1916,9 @@ const make = Effect.gen(function* () {
         const { parent, limits } = yield* loadCaller(scope);
         const existing = yield* loadScheduledTask(input.scheduledTaskId, limits);
         yield* assertLiveCallerForOtherProject(scope, parent, existing.projectId);
+        if (input.schedule !== undefined) {
+          yield* assertMaySetGate(limits, input.schedule, existing.schedule);
+        }
         if (
           input.bindToCurrentThread === true &&
           (parent === undefined || parent.thread.projectId !== existing.projectId)

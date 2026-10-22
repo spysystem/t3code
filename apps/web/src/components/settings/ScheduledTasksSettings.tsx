@@ -729,6 +729,17 @@ function ScheduledTaskRow({
               "Not scheduled"
             )}
           </span>
+          {task.schedule.type !== "webhook" && task.schedule.gate ? (
+            <span>
+              Gate <code className="font-mono break-all">{task.schedule.gate.command}</code>
+              {task.gateCheckedAt ? (
+                <>
+                  {" "}
+                  · checked <ScheduledRelativeLabel value={task.gateCheckedAt} />
+                </>
+              ) : null}
+            </span>
+          ) : null}
           {task.lastRunStatus !== "never" ? (
             <Badge variant={statusVariant(task.lastRunStatus)}>{task.lastRunStatus}</Badge>
           ) : null}

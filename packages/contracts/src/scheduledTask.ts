@@ -29,16 +29,48 @@ const ScheduledTaskIntervalMs = Schema.Int.check(Schema.isGreaterThan(0)).annota
   description: "Positive interval in milliseconds.",
 });
 
+export const DEFAULT_SCHEDULED_TASK_GATE_TIMEOUT_MS = 60_000;
+export const MAX_SCHEDULED_TASK_GATE_TIMEOUT_MS = 300_000;
+/** In UTF-16 code units, as JavaScript's string `length` counts them. */
+export const SCHEDULED_TASK_GATE_OUTPUT_LIMIT = 20_000;
+
+export const ScheduledTaskGate = Schema.Struct({
+  command: TrimmedNonEmptyString.annotate({
+    description:
+      "Shell command run in the project folder, with the server's environment. Name its tools by absolute path outside the project folder.",
+  }),
+  timeoutMs: Schema.optional(
+    Schema.Int.check(
+      Schema.isBetween({ minimum: 1_000, maximum: MAX_SCHEDULED_TASK_GATE_TIMEOUT_MS }),
+    ).annotate({
+      description: `Kill the command after this many milliseconds; default ${DEFAULT_SCHEDULED_TASK_GATE_TIMEOUT_MS}, at most ${MAX_SCHEDULED_TASK_GATE_TIMEOUT_MS}.`,
+    }),
+  ),
+}).annotate({
+  description:
+    "Check run at each tick before any turn: exit 0 with output starts the turn with it, exit 0 without output skips the tick, any other exit or a timeout fails it.",
+});
+export type ScheduledTaskGate = typeof ScheduledTaskGate.Type;
+
+const ScheduledTaskGateField = { gate: Schema.optional(ScheduledTaskGate) };
+
+const ScheduledTaskUpsertGateField = {
+  gate: Schema.optional(Schema.NullOr(ScheduledTaskGate)).annotate({
+    description: "Omit to keep the stored gate; null removes it.",
+  }),
+};
+
 const ScheduledTaskIntervalSchedule = Schema.Struct({
   type: Schema.Literal("interval").annotate({
     description: "Select interval scheduling.",
   }),
   everyMs: ScheduledTaskIntervalMs,
+  ...ScheduledTaskGateField,
 }).annotate({
   description: "Run repeatedly after a fixed number of milliseconds.",
 });
 
-const ScheduledTaskFixedTimeSchedule = Schema.Struct({
+const ScheduledTaskFixedTimeFields = {
   type: Schema.Literal("fixed_time").annotate({
     description: "Select a fixed local wall-clock time.",
   }),
@@ -52,6 +84,11 @@ const ScheduledTaskFixedTimeSchedule = Schema.Struct({
       description: "Optional weekdays; omit to run every day.",
     }),
   ),
+};
+
+const ScheduledTaskFixedTimeSchedule = Schema.Struct({
+  ...ScheduledTaskFixedTimeFields,
+  ...ScheduledTaskGateField,
 }).annotate({
   description: "Run at a fixed local wall-clock time on selected weekdays.",
 });
@@ -182,6 +219,13 @@ const ScheduledTaskUpsertWebhookSchedule = Schema.Struct({
   maxDeliveryAgeMinutes: Schema.optional(Schema.NullOr(WebhookMaxDeliveryAgeMinutes)),
   dedupe: Schema.optional(ScheduledTaskWebhookDedupe),
   filters: Schema.optional(ScheduledTaskWebhookFilters),
+  // Declared so a gate is rejected rather than silently dropped.
+  gate: Schema.optionalKey(
+    Schema.Never.annotate({
+      description: "Webhook tasks take no gate.",
+      message: "Only interval and fixed-time tasks take a gate.",
+    }),
+  ),
 }).annotate({
   description:
     "Run on each request to the task's webhook URL. The prompt may use {{body.path}}, {{headers.name}}, {{query.name}}, {{body}} and {{request}} placeholders.",
@@ -211,10 +255,16 @@ export const ScheduledTaskUpsertSchedule = Schema.Union([
     ).annotate({
       description: "Interval in milliseconds, with a minimum of 60000 (one minute).",
     }),
+    ...ScheduledTaskUpsertGateField,
   }).annotate({
     description: "Run repeatedly after a fixed number of milliseconds.",
   }),
-  ScheduledTaskFixedTimeSchedule,
+  Schema.Struct({
+    ...ScheduledTaskFixedTimeFields,
+    ...ScheduledTaskUpsertGateField,
+  }).annotate({
+    description: "Run at a fixed local wall-clock time on selected weekdays.",
+  }),
   ScheduledTaskUpsertWebhookSchedule,
 ]).annotate({
   description: "Writable trigger. Pass an object with type 'interval', 'fixed_time' or 'webhook'.",
@@ -253,6 +303,8 @@ export const ScheduledTask = Schema.Struct({
   lastRunError: Schema.NullOr(Schema.String),
   runCount: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
   webhook: Schema.optional(ScheduledTaskWebhookEndpoint),
+  /** When the gate last ran; a quiet check updates it without a run. */
+  gateCheckedAt: Schema.optional(Schema.NullOr(IsoDateTime)),
 });
 export type ScheduledTask = typeof ScheduledTask.Type;
 
