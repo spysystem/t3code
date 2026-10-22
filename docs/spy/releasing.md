@@ -150,6 +150,12 @@ release; rerunning the command updates it. `scripts/build-spy-desktop-mac.test.s
 script on Linux or WSL with faked macOS tools; only a real Mac proves the build. T3 Connect passkey
 sign-in depends on the Mac identity question under Desktop distribution.
 
+## Downgrading
+
+An older server cannot read a fork feature's data and may drop it. Gated scheduled tasks are
+one case: a server without gates ignores a task's gate, so every tick starts a turn, and its
+next save of the task drops the gate. Pause gated tasks before installing an older build.
+
 ## Desktop distribution
 
 After the maintainer has tested and approved a candidate, the explicit publish command uploads
