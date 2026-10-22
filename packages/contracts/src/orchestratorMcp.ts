@@ -70,7 +70,7 @@ const OrchestratorMcpSchedule = Schema.Union([
   OrchestratorMcpScheduleFromJsonString,
 ]).annotate({
   description:
-    "Trigger: {type:'interval',everyMs}, {type:'fixed_time',timeOfDay,weekdays?}, {type:'once',runAt}, or {type:'webhook'}.",
+    "Trigger: {type:'interval',everyMs}, {type:'fixed_time',timeOfDay,weekdays?}, {type:'once',runAt}, or {type:'webhook'}. Interval and fixed_time may add gate:{command,timeoutMs?}.",
 });
 
 const OrchestratorMcpTargetOptionsFromRecord = Schema.Record(
@@ -755,6 +755,12 @@ export const OrchestratorMcpScheduledTask = Schema.Struct({
   schedule: ScheduledTaskSchedule,
   nextRunAt: Schema.NullOr(IsoDateTime),
   lastRunStatus: ScheduledTaskRunStatus,
+  lastRunError: Schema.optional(Schema.String).annotate({
+    description: "Why the last run failed; for a gate, its exit code and the end of its stderr.",
+  }),
+  gateCheckedAt: Schema.optional(IsoDateTime).annotate({
+    description: "When the gate last ran, including checks that started no turn.",
+  }),
   webhookUrl: Schema.optional(Schema.String).annotate({
     description:
       "Webhook bearer URL, returned only on task creation to callers allowed to run it. Lists and updates omit it; the user can copy it from Settings. Creation may omit it without T3 Connect remote access or run permission.",
