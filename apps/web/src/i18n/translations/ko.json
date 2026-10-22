@@ -13043,5 +13043,25 @@
   "14cca3435ebed117": "Start from ticket",
   "42784fc645b82bd6": "Opens the ticket's Dev support thread, or starts one that runs the ticket investigation skill.",
   "8d15bd7c3dcfe3ab": "Task number",
-  "1dad79c8e26dbd51": "Start from ticket"
+  "1dad79c8e26dbd51": "Start from ticket",
+  "8ba06e886996d24c": [
+    "Gate",
+    " ",
+    {
+      "t": "code",
+      "i": 1,
+      "c": {
+        "i": 2,
+        "k": "_gt_value_2",
+        "v": "v"
+      }
+    }
+  ],
+  "7e8dc530b1181322": [
+    "· checked ",
+    {
+      "t": "ScheduledRelativeLabel",
+      "i": 1
+    }
+  ]
 }
