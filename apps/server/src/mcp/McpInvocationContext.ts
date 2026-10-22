@@ -5,6 +5,7 @@ import {
   OrchestratorMcpFailure,
   PreviewAutomationUnavailableError,
   type ProviderInstanceId,
+  type ProviderInteractionMode,
   type RuntimeMode,
   type ThreadId,
 } from "@t3tools/contracts";
@@ -38,6 +39,12 @@ export interface McpClientCaller {
 /** Read-only clients map to the lowest mode because McpToolAccess blocks writes first. */
 export const clientRuntimeModeCeiling = (client: McpClientCaller | undefined): RuntimeMode =>
   client === undefined || client.access === "read-only" ? "approval-required" : client.access;
+
+/** The `assertFullAccess` rule for environment-changing tools: full-access and default mode. */
+export const isFullAccess = (limits: {
+  readonly runtimeMode: RuntimeMode;
+  readonly interactionMode: ProviderInteractionMode;
+}) => limits.runtimeMode === "full-access" && limits.interactionMode === "default";
 
 /** Thread callers default to their own thread; client callers need thread for tools that act as the caller. */
 export interface McpInvocationScope {
