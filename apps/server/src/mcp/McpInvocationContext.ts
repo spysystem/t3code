@@ -96,6 +96,12 @@ export const clientModeCeiling = (client: McpClientCaller | undefined): ClientMo
   };
 };
 
+/** The `assertFullAccess` rule for environment-changing tools: full-access and default mode. */
+export const isFullAccess = (limits: {
+  readonly runtimeMode: RuntimeMode;
+  readonly interactionMode: ProviderInteractionMode;
+}) => limits.runtimeMode === "full-access" && limits.interactionMode === "default";
+
 /** Thread callers default to their own thread; client callers need thread for tools that act as the caller. */
 export interface McpInvocationScope {
   readonly environmentId: EnvironmentId;
