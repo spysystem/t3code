@@ -855,6 +855,25 @@ function ScheduledTaskRow({
               gt("Not scheduled")
             )}
           </span>
+          {(task.schedule.type === "interval" || task.schedule.type === "fixed_time") &&
+          task.schedule.gate ? (
+            <span>
+              <T>
+                Gate{" "}
+                <code className="font-mono break-all">
+                  <Var>{task.schedule.gate.command}</Var>
+                </code>
+              </T>
+              {task.gateCheckedAt ? (
+                <>
+                  {" "}
+                  <T>
+                    · checked <ScheduledRelativeLabel value={task.gateCheckedAt} />
+                  </T>
+                </>
+              ) : null}
+            </span>
+          ) : null}
           {task.lastRunStatus !== "never" ? (
             <Badge variant={statusVariant(task.lastRunStatus)}>
               {messages(RUN_STATUS_LABELS[task.lastRunStatus])}
