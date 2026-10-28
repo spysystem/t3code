@@ -7,6 +7,7 @@ import { assert, describe, it } from "@effect/vitest";
 
 import {
   PULL_REQUEST_WATCH_WAKE_LIMIT,
+  type PullRequestWatchChange,
   evaluatePullRequestWatch as evaluate,
   pullRequestWatchMessage,
 } from "./pullRequestWatch.ts";
@@ -434,5 +435,107 @@ describe("evaluatePullRequestWatch", () => {
   it("never reports missing checks on a host where an empty list says nothing", () => {
     const silent = detail({ capabilities: capabilities(false), checks: [] });
     assert.isTrue(anHourLater(watch(), silent).every((kinds) => kinds.length === 0));
+    // A running clock would force a detail read on every sweep.
+    assert.isNull(evaluate(watch(), silent, noRemarks, 0).next.checksAwaitedSince);
+  });
+
+  const readsAt = (
+    first: ThreadPullRequestWatch,
+    reads: ReadonlyArray<readonly [minute: number, read: Detail]>,
+  ): ReadonlyArray<ReadonlyArray<PullRequestWatchChange>> => {
+    const told: Array<ReadonlyArray<PullRequestWatchChange>> = [];
+    let current = first;
+    for (const [minute, read] of reads) {
+      const { changes, next } = evaluate(current, read, noRemarks, minute * 60_000);
+      told.push(changes);
+      current = next;
+    }
+    return told;
+  };
+  const watching = watch({ headSha: "aaaaaaaaaa", checksAwaitedSince: null });
+  const pushed = (checks: Detail["checks"]) => detail({ headSha: "bbbbbbbbbb", checks });
+  const stuck = pushed([check("lint", "success"), check("CodeRabbit", "pending")]);
+  const green = pushed([check("lint", "success"), check("CodeRabbit", "success")]);
+
+  it("tells once when a pushed head's checks are still pending after 30 minutes", () => {
+    // An empty read after checks were seen is a failed read, not a head no check reports on.
+    const reads = [0, 20, 29, 30, 45, 60].map(
+      (minute) => [minute, minute === 20 ? pushed([]) : stuck] as const,
+    );
+    assert.deepEqual(readsAt(watching, reads), [
+      [],
+      [],
+      [],
+      [{ kind: "checks-pending", minutes: 30 }],
+      [],
+      [],
+    ]);
+    // Where an empty list says nothing, the clock starts when the head's first checks report.
+    const silent = (checks: Detail["checks"]) =>
+      detail({ capabilities: capabilities(false), headSha: "bbbbbbbbbb", checks });
+    assert.deepEqual(
+      readsAt(watching, [
+        [0, silent([])],
+        [10, silent(stuck.checks)],
+        [39, silent(stuck.checks)],
+        [40, silent(stuck.checks)],
+      ]),
+      [[], [], [], [{ kind: "checks-pending", minutes: 30 }]],
+    );
+  });
+
+  it("wakes only for passed checks when they settle within 30 minutes", () => {
+    assert.deepEqual(
+      readsAt(watching, [
+        [0, stuck],
+        [29, green],
+        [30, green],
+        [60, green],
+      ]),
+      [[], [{ kind: "checks-passed", count: 2, required: false }], [], []],
+    );
+    const required = pushed([{ ...check("test", "success"), required: true }, stuck.checks[1]!]);
+    assert.deepEqual(
+      readsAt(watching, [
+        [0, required],
+        [30, required],
+        [60, required],
+      ]),
+      [[{ kind: "checks-passed", count: 1, required: true }], [], []],
+    );
+  });
+
+  it("still reports checks that settle after the pending notice, once", () => {
+    assert.deepEqual(
+      readsAt(watching, [
+        [0, stuck],
+        [30, stuck],
+        [50, green],
+        [60, green],
+      ]),
+      [
+        [],
+        [{ kind: "checks-pending", minutes: 30 }],
+        [{ kind: "checks-passed", count: 2, required: false }],
+        [],
+      ],
+    );
+  });
+
+  it("restarts the clock once when settled checks go pending again on the same head", () => {
+    const failed = pushed([check("lint", "success"), check("CodeRabbit", "failure")]);
+    const failure = { kind: "checks-failed", failed: [failed.checks[1]!] } as const;
+    assert.deepEqual(
+      readsAt(watching, [
+        [0, failed],
+        [10, stuck],
+        [39, stuck],
+        [40, stuck],
+        [50, failed],
+        [55, stuck],
+        [120, stuck],
+      ]),
+      [[failure], [], [], [{ kind: "checks-pending", minutes: 30 }], [failure], [], []],
+    );
   });
 });
