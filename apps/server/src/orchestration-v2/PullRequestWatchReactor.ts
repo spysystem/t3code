@@ -218,7 +218,9 @@ function watchesEqual(left: ThreadPullRequestWatch, right: ThreadPullRequestWatc
     left.wakes === right.wakes &&
     left.awaitingBaseline === right.awaitingBaseline &&
     left.checksAwaitedSince === right.checksAwaitedSince &&
-    left.checksPending === right.checksPending
+    left.checksPending === right.checksPending &&
+    (left.checksSeen ?? false) === (right.checksSeen ?? false) &&
+    left.checksRestart === right.checksRestart
   );
 }
 
