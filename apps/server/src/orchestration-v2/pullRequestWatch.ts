@@ -11,6 +11,8 @@ import * as DateTime from "effect/DateTime";
 export const PULL_REQUEST_WATCH_WAKE_LIMIT = 10;
 /** How long a head may go without any check before the agent is told none reported. */
 export const PULL_REQUEST_WATCH_NO_CHECKS_MS = 15 * 60_000;
+/** How long a head's checks may stay pending before the agent is told they have not settled. */
+const PULL_REQUEST_WATCH_PENDING_CHECKS_MS = 30 * 60_000;
 const LISTED_ITEMS = 10;
 const SNIPPET_LENGTH = 200;
 
@@ -20,6 +22,7 @@ export type PullRequestWatchChange =
   | { readonly kind: "checks-awaiting-approval"; readonly checks: ReadonlyArray<PullRequestCheck> }
   | { readonly kind: "remarks"; readonly remarks: ReadonlyArray<PullRequestComment> }
   | { readonly kind: "no-checks"; readonly minutes: number }
+  | { readonly kind: "checks-pending"; readonly minutes: number }
   | { readonly kind: "conflicting" }
   | { readonly kind: "needs-rebase" }
   | { readonly kind: "merge-queue-removed"; readonly reason: string | null };
@@ -123,6 +126,7 @@ export function evaluatePullRequestWatch(
   const passedNow =
     awaitingApproval.length === 0 &&
     gate.every((check) => check.status !== "pending" && !isFailedCheck(check));
+  const gatePending = gate.some((check) => check.status === "pending");
   if (checks.length > 0 && !(unread && passedNow)) {
     const gateNames = gate.map((check) => check.name);
     const told = passed && passedChecks.length === 0 ? gateNames : passedChecks;
@@ -159,22 +163,39 @@ export function evaluatePullRequestWatch(
     passedChecks = passedNow ? gateNames : [];
   }
 
-  // Only a head never read with checks waits for them; a legacy watch's clock starts at its next
-  // push. CI can register late on any host, so every host waits, but running out of time is news
-  // only where a host always reports checks: elsewhere an empty list can mean there are none.
-  const awaitedBefore =
-    headMoved || watch.awaitingBaseline === "all"
-      ? DateTime.formatIso(DateTime.makeUnsafe(now))
-      : (watch.checksAwaitedSince ?? null);
-  let checksAwaitedSince = checks.length > 0 ? null : awaitedBefore;
+  // A push or a new watch's first read is awaited until its gate settles; the agent is told once if
+  // it does not. A legacy watch's clock starts at its next push. CI can register late, so every host
+  // waits for a first check, but none reporting is news only where a host always reports checks;
+  // elsewhere the clock starts again when the head's first checks report.
+  const nowIso = DateTime.formatIso(DateTime.makeUnsafe(now));
+  const listsAllChecks = detail.capabilities.checksAlwaysReport === true;
+  const clockStarts = headMoved || watch.awaitingBaseline === "all";
+  const firstChecks =
+    !clockStarts && !listsAllChecks && watch.checksSeen === false && checks.length > 0;
+  let checksAwaitedSince = clockStarts
+    ? nowIso
+    : (watch.checksAwaitedSince ?? (firstChecks ? nowIso : null));
+  const checksSeen = checks.length > 0 || (!headMoved && watch.checksSeen === true);
+  // A settled gate that goes pending again, such as a rerun of a failed check, restarts the clock
+  // once per head.
+  let checksRestart = headMoved ? undefined : watch.checksRestart;
+  if (checks.length > 0 && !gatePending) {
+    checksAwaitedSince = null;
+    checksRestart ??= "armed";
+  } else if (gatePending && checksRestart === "armed") {
+    checksAwaitedSince = nowIso;
+    checksRestart = "used";
+  }
   const awaitedMs = checksAwaitedSince === null ? 0 : now - Date.parse(checksAwaitedSince);
-  if (!unread && awaitedMs >= PULL_REQUEST_WATCH_NO_CHECKS_MS) {
-    if (detail.capabilities.checksAlwaysReport === true) {
-      changes.push({ kind: "no-checks", minutes: Math.round(awaitedMs / 60_000) });
-    }
+  const awaitedMinutes = Math.round(awaitedMs / 60_000);
+  if (gatePending && awaitedMs >= PULL_REQUEST_WATCH_PENDING_CHECKS_MS) {
+    changes.push({ kind: "checks-pending", minutes: awaitedMinutes });
+    checksAwaitedSince = null;
+  } else if (!checksSeen && !unread && awaitedMs >= PULL_REQUEST_WATCH_NO_CHECKS_MS) {
+    if (listsAllChecks) changes.push({ kind: "no-checks", minutes: awaitedMinutes });
     checksAwaitedSince = null;
     checksPending = false;
-  } else if (checksAwaitedSince !== null) {
+  } else if (!checksSeen && checksAwaitedSince !== null) {
     checksPending = true;
   }
 
@@ -256,6 +277,8 @@ export function evaluatePullRequestWatch(
         }),
       checksAwaitedSince,
       checksPending,
+      checksSeen,
+      ...(checksRestart !== undefined && { checksRestart }),
     },
     exhausted: commentsOnly && wakes >= PULL_REQUEST_WATCH_WAKE_LIMIT,
   };
@@ -390,6 +413,8 @@ function changeLines(
       ];
     case "needs-rebase":
       return [`- The branch requires a rebase onto ${context.baseBranch}.`];
+    case "checks-pending":
+      return [`- Checks are still pending${context.commit} after ${change.minutes} minutes.`];
     case "conflicting":
       return [`- The branch now conflicts with ${context.baseBranch}.`];
     case "merge-queue-removed":
@@ -405,6 +430,7 @@ const SUMMARY: Record<PullRequestWatchChange["kind"], string> = {
   "checks-awaiting-approval": "checks await approval",
   remarks: "new comments",
   "no-checks": "no checks reported",
+  "checks-pending": "checks still pending",
   conflicting: "merge conflict",
   "needs-rebase": "rebase required",
   "merge-queue-removed": "removed from merge queue",
