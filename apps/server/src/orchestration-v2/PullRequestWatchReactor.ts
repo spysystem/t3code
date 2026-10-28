@@ -205,7 +205,9 @@ function watchesEqual(left: ThreadPullRequestWatch, right: ThreadPullRequestWatc
     left.mergeQueueRemovalId === right.mergeQueueRemovalId &&
     left.wakes === right.wakes &&
     left.awaitingBaseline === right.awaitingBaseline &&
-    left.checksAwaitedSince === right.checksAwaitedSince
+    left.checksAwaitedSince === right.checksAwaitedSince &&
+    (left.checksSeen ?? false) === (right.checksSeen ?? false) &&
+    left.checksRestart === right.checksRestart
   );
 }
 
