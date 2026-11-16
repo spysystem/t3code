@@ -141,6 +141,8 @@ export const ExecutionEnvironmentCapabilities = Schema.Struct({
   threadProjectFromScratch: Schema.optionalKey(Schema.Boolean),
   /** Server keeps `space` on threads it creates, launches, and updates through thread.metadata.update. */
   threadSpaces: Schema.optionalKey(Schema.Boolean),
+  /** The spaces the server stores. Absent with `threadSpaces` means only Development and Dev support. */
+  threadSpaceIds: Schema.optionalKey(Schema.Array(Schema.String)),
   threadTitleRegeneration: Schema.optionalKey(Schema.Boolean),
   threadVisitedTracking: Schema.optionalKey(Schema.Boolean),
   /** Supports reading the provider's native thread ID on demand. */

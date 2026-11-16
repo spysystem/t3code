@@ -18,6 +18,7 @@ import { useRouter } from "@tanstack/react-router";
 import { pickSnoozePreset, resolveSnoozePresets } from "../components/Sidebar.snooze";
 import {
   buildThreadActionMenuItems,
+  threadActionMoveTarget,
   threadActionRequiresOperate,
   type ThreadActionMenuId,
 } from "../components/threadActionMenu.logic";
@@ -32,7 +33,7 @@ import {
   readEnvironmentServerConfigLoaded,
   readEnvironmentSupportsAutoSettleOptOut,
   readEnvironmentSupportsNativeThreadId,
-  readEnvironmentSupportsSpaces,
+  readEnvironmentThreadSpaces,
   readThreadShell,
   useProjects,
 } from "../state/entities";
@@ -51,7 +52,7 @@ import { useCopyNativeThreadId } from "./useCopyNativeThreadId";
 import { useNewThreadHandler } from "./useHandleNewThread";
 import { useClientSettings } from "./useSettings";
 import { canTurnThreadIntoProject, useThreadActions } from "./useThreadActions";
-import { otherThreadSpace, threadSpaceOf } from "../threadSpace";
+import { threadSpaceOf } from "../threadSpace";
 
 function failureToast(title: string, error: unknown) {
   toastManager.add(
@@ -132,7 +133,7 @@ export function useThreadActionMenu(input: {
         pinning: configLoaded,
         titleRegeneration: configLoaded,
         nativeThreadId: readEnvironmentSupportsNativeThreadId(threadRef.environmentId),
-        spaces: readEnvironmentSupportsSpaces(threadRef.environmentId),
+        spaces: readEnvironmentThreadSpaces(threadRef.environmentId),
       };
       const isRegeneratingTitle = thread.titleRegeneration != null;
       const snoozePresets = resolveSnoozePresets(now, timestampFormat, threadRef.environmentId);
@@ -193,6 +194,13 @@ export function useThreadActionMenu(input: {
           failureToast(title, squashAtomCommandFailure(result));
         }
       };
+      const moveTo = threadActionMoveTarget(action);
+      if (moveTo !== null) {
+        if (moveTo !== threadSpaceOf(thread)) {
+          await reportFailure("Failed to move thread", () => setThreadSpace(threadRef, moveTo));
+        }
+        return;
+      }
       switch (action) {
         case "find":
           onFind?.(threadRef);
@@ -281,11 +289,6 @@ export function useThreadActionMenu(input: {
           }
           return;
         }
-        case "move-space":
-          await reportFailure("Failed to move thread", () =>
-            setThreadSpace(threadRef, otherThreadSpace(threadSpaceOf(thread))),
-          );
-          return;
         case "copy-path": {
           const workspacePath = thread.worktreePath ?? projectCwd;
           if (!workspacePath) {

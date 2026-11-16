@@ -1,5 +1,6 @@
 import { backgroundWorkHoldsCompletion } from "@t3tools/shared/orchestrationV2PendingBackgroundWork";
 import { threadPullRequestsOf } from "../threadPullRequests.ts";
+import { orchestrationV2ThreadSpaceOf } from "@t3tools/contracts";
 import type {
   ThreadLinkedPullRequest,
   EnvironmentId,
@@ -347,7 +348,9 @@ export function presentThreadShell(
     limitRecovery: thread.limitRecovery ?? null,
     pinnedAt: nullableIso(thread.pinnedAt ?? null),
     autoSettleDisabledAt: nullableIso(thread.autoSettleDisabledAt ?? null),
-    ...(thread.space === undefined ? {} : { space: thread.space }),
+    ...(thread.space === undefined && thread.addedSpace === undefined
+      ? {}
+      : { space: orchestrationV2ThreadSpaceOf(thread) }),
     pinOrderKey: thread.pinOrderKey ?? null,
     activeOrderKey: thread.activeOrderKey ?? null,
     ...(thread.lastVisitedAt === undefined

@@ -21,6 +21,7 @@ import {
   MessageId,
   EnvironmentId,
   NodeId,
+  ForwardCompatibleOptional,
   ForwardCompatibleUnion,
   ForwardCompatibleUnionArray,
   hasUnknownUnionTag,
@@ -471,8 +472,41 @@ const OrchestrationV2LastTitleRegeneration = Schema.Struct({
  * Moves reuse thread.metadata.update and its event: stored events decode
  * strictly, so a new event type would break older builds and rollbacks.
  */
-export const OrchestrationV2ThreadSpace = Schema.Literals(["development", "support"]);
+export const OrchestrationV2ThreadSpace = Schema.Literals(["development", "support", "automation"]);
 export type OrchestrationV2ThreadSpace = typeof OrchestrationV2ThreadSpace.Type;
+export const isOrchestrationV2ThreadSpace = Schema.is(OrchestrationV2ThreadSpace);
+
+/**
+ * Stored threads keep the first two spaces in `space`, which SPY builds before
+ * Automation decode strictly, and later ones in `addedSpace`, which those builds
+ * drop, so they list such threads as Development. This build reads unknown
+ * `addedSpace` values the same way, so another space can be added there later.
+ */
+const OrchestrationV2StoredThreadSpace = Schema.Literals(["development", "support"]);
+const OrchestrationV2AddedThreadSpace = Schema.Literals(["automation"]);
+const isAddedThreadSpace = Schema.is(OrchestrationV2AddedThreadSpace);
+
+interface StoredThreadSpaceFields {
+  readonly space?: typeof OrchestrationV2StoredThreadSpace.Type | undefined;
+  readonly addedSpace?: typeof OrchestrationV2AddedThreadSpace.Type | undefined;
+}
+
+export function orchestrationV2ThreadSpaceOf(
+  thread: StoredThreadSpaceFields,
+): OrchestrationV2ThreadSpace {
+  return thread.addedSpace ?? thread.space ?? "development";
+}
+
+/** The stored fields for `space`; spread over a thread, it also clears the other key. */
+export function orchestrationV2ThreadSpaceFields(space: OrchestrationV2ThreadSpace) {
+  return isAddedThreadSpace(space)
+    ? { space: undefined, addedSpace: space }
+    : { space, addedSpace: undefined };
+}
+
+/** For tool descriptions; JSON Schema shows the values but not what they are for. */
+export const ORCHESTRATION_V2_THREAD_SPACE_SUMMARY =
+  '"development", "support" (Dev support), or "automation" (threads bots run)';
 
 export const OrchestrationV2AppThread = Schema.Struct({
   ...OrchestrationV2CreationFields,
@@ -523,7 +557,8 @@ export const OrchestrationV2AppThread = Schema.Struct({
   guestShare: Schema.optional(Schema.NullOr(ThreadGuestShare)),
   pinnedAt: Schema.optional(Schema.NullOr(Schema.DateTimeUtc)),
   autoSettleDisabledAt: Schema.optional(Schema.NullOr(Schema.DateTimeUtc)),
-  space: Schema.optional(OrchestrationV2ThreadSpace),
+  space: Schema.optional(OrchestrationV2StoredThreadSpace),
+  addedSpace: ForwardCompatibleOptional(OrchestrationV2AddedThreadSpace),
   pinOrderKey: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   activeOrderKey: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   /** Absent on threads written before tags existed; read as empty. */
@@ -585,11 +620,11 @@ export const isDelegatedAppThread = (
  * skip their activity bump so the thread keeps its place in lists.
  */
 export function isOrchestrationV2ThreadSpaceMove(
-  previous: Pick<OrchestrationV2AppThread, "space" | "updatedAt">,
-  next: Pick<OrchestrationV2AppThread, "space" | "updatedAt">,
+  previous: Pick<OrchestrationV2AppThread, "space" | "addedSpace" | "updatedAt">,
+  next: Pick<OrchestrationV2AppThread, "space" | "addedSpace" | "updatedAt">,
 ): boolean {
   return (
-    (previous.space ?? "development") !== (next.space ?? "development") &&
+    orchestrationV2ThreadSpaceOf(previous) !== orchestrationV2ThreadSpaceOf(next) &&
     DateTime.toEpochMillis(previous.updatedAt) === DateTime.toEpochMillis(next.updatedAt)
   );
 }
@@ -2291,8 +2326,9 @@ export const OrchestrationV2ThreadShell = Schema.Struct({
   limitRecovery: Schema.optional(Schema.NullOr(OrchestrationV2LimitRecovery)),
   pinnedAt: Schema.optional(Schema.NullOr(Schema.DateTimeUtc)),
   autoSettleDisabledAt: Schema.optional(Schema.NullOr(Schema.DateTimeUtc)),
-  /** Omitted by servers that predate thread spaces; absent means "development". */
-  space: Schema.optional(OrchestrationV2ThreadSpace),
+  /** Omitted by servers that predate thread spaces; read both keys with `orchestrationV2ThreadSpaceOf`. */
+  space: Schema.optional(OrchestrationV2StoredThreadSpace),
+  addedSpace: ForwardCompatibleOptional(OrchestrationV2AddedThreadSpace),
   pinOrderKey: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   activeOrderKey: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   /** Absent on threads written before tags existed; read as empty. */
@@ -3199,6 +3235,18 @@ export const OrchestrationV2Command = Schema.Union([
     threadId: ThreadId,
     expectedLatestRunId: Schema.optional(RunId),
     settledAt: Schema.optional(Schema.DateTimeUtc),
+  }),
+  /**
+   * Snoozes an Automation thread after a quiet turn. Rejected when the thread changed since
+   * snapshotAt, left Automation, or someone opened or woke it after turnBeganAt.
+   */
+  Schema.Struct({
+    type: Schema.Literal("thread.auto-snooze"),
+    commandId: CommandId,
+    threadId: ThreadId,
+    snapshotAt: Schema.DateTimeUtc,
+    turnBeganAt: Schema.DateTimeUtc,
+    snoozedUntil: IsoDateTime,
   }),
   /** Rejects changes since snapshotAt or any explicit settled override to preserve user actions. */
   Schema.Struct({

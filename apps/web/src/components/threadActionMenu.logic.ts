@@ -1,6 +1,8 @@
 import type { ContextMenuItem, OrchestrationV2ThreadSpace } from "@t3tools/contracts";
 import type { SnoozePreset } from "@t3tools/client-runtime/state/thread-settled";
 
+import { THREAD_SPACE_LABELS, THREAD_SPACES } from "../threadSpace";
+
 export type ThreadActionMenuId =
   | "find"
   | "new-thread-on-branch"
@@ -22,6 +24,7 @@ export type ThreadActionMenuId =
   | "mark-unread"
   | "share-guest"
   | "move-space"
+  | `move-space:${OrchestrationV2ThreadSpace}`
   | "copy"
   | "copy-path"
   | "copy-branch"
@@ -93,14 +96,22 @@ export interface ThreadActionMenuState {
     readonly pinning: boolean;
     readonly titleRegeneration: boolean;
     readonly nativeThreadId?: boolean;
-    /** Server stores thread spaces. */
-    readonly spaces: boolean;
+    /** Spaces the thread's server stores; a move needs at least two. */
+    readonly spaces: ReadonlyArray<OrchestrationV2ThreadSpace>;
   };
   readonly snoozePresets: ReadonlyArray<SnoozePreset>;
   /** Guest links need their own grant, so the caller checks it instead of `canOperate`. */
   readonly canShareWithGuest?: boolean;
   /** A No project thread with its own folder, on a server that can promote it. */
   readonly canTurnIntoProject?: boolean;
+}
+
+/** The space a "Move to" choice targets, or null for any other action. */
+export function threadActionMoveTarget(
+  action: ThreadActionMenuId,
+): OrchestrationV2ThreadSpace | null {
+  const space = action.startsWith("move-space:") ? action.slice("move-space:".length) : null;
+  return THREAD_SPACES.find((candidate) => candidate === space) ?? null;
 }
 
 /** Local navigation, read markers, and copying remain available to read-only clients. */
@@ -188,12 +199,17 @@ export function buildThreadActionMenuItems(
     ...(state.canShareWithGuest
       ? [{ id: "share-guest" as const, label: "Share with guest", icon: "user-plus" }]
       : []),
-    ...(state.supports.spaces
+    ...(state.supports.spaces.length > 1
       ? [
           {
             id: "move-space" as const,
-            label: state.space === "support" ? "Move to Development" : "Move to Dev support",
+            label: "Move to",
             icon: "arrow-right-left",
+            children: state.supports.spaces.map((space) => ({
+              id: `move-space:${space}` as const,
+              label: THREAD_SPACE_LABELS[space],
+              checked: space === state.space,
+            })),
           },
         ]
       : []),

@@ -495,6 +495,7 @@ export type ActiveThreadListEntry = Pick<
   | "settledAt"
   | "snoozedUntil"
   | "space"
+  | "addedSpace"
   | "updatedAt"
 >;
 
@@ -1913,6 +1914,9 @@ export function threadShellFromProjection(
 
     autoSettleDisabledAt: projection.thread.autoSettleDisabledAt ?? null,
     ...(projection.thread.space === undefined ? {} : { space: projection.thread.space }),
+    ...(projection.thread.addedSpace === undefined
+      ? {}
+      : { addedSpace: projection.thread.addedSpace }),
     pinOrderKey: projection.thread.pinOrderKey ?? null,
     ...(projection.thread.tags?.length ? { tags: projection.thread.tags } : {}),
     lastVisitedAt: projection.thread.lastVisitedAt,
@@ -2212,6 +2216,9 @@ function shellFromState(input: {
 
     autoSettleDisabledAt: input.state.thread.autoSettleDisabledAt ?? null,
     ...(input.state.thread.space === undefined ? {} : { space: input.state.thread.space }),
+    ...(input.state.thread.addedSpace === undefined
+      ? {}
+      : { addedSpace: input.state.thread.addedSpace }),
     pinOrderKey: input.state.thread.pinOrderKey ?? null,
     ...(input.state.thread.tags?.length ? { tags: input.state.thread.tags } : {}),
     lastVisitedAt: input.state.thread.lastVisitedAt,
@@ -9172,6 +9179,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
         readonly settled_at: string | null;
         readonly snoozed_until: string | null;
         readonly space: string | null;
+        readonly added_space: string | null;
       }>`
         SELECT
           t.thread_id,
@@ -9188,7 +9196,8 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
           json_extract(t.payload_json, '$.settledOverride') AS settled_override,
           json_extract(t.payload_json, '$.settledAt') AS settled_at,
           json_extract(t.payload_json, '$.snoozedUntil') AS snoozed_until,
-          json_extract(t.payload_json, '$.space') AS space
+          json_extract(t.payload_json, '$.space') AS space,
+          json_extract(t.payload_json, '$.addedSpace') AS added_space
         FROM orchestration_v2_projection_threads t
         WHERE t.deleted_at IS NULL
           AND t.archived_at IS NULL${projectId === undefined ? sql`` : sql` AND t.project_id = ${projectId}`}
@@ -9214,6 +9223,7 @@ export const layer: Layer.Layer<ProjectionStoreV2, never, SqlClient.SqlClient> =
         settledAt: row.settled_at === null ? null : DateTime.makeUnsafe(row.settled_at),
         snoozedUntil: row.snoozed_until === null ? null : DateTime.makeUnsafe(row.snoozed_until),
         ...(row.space === "support" || row.space === "development" ? { space: row.space } : {}),
+        ...(row.added_space === "automation" ? { addedSpace: row.added_space } : {}),
         updatedAt: DateTime.makeUnsafe(row.updated_at),
       }));
     }, Effect.mapError(shellSnapshotReadError));

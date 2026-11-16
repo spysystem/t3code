@@ -1,6 +1,7 @@
 import {
   EnvironmentId,
   ORCHESTRATION_PROTOCOL_VERSION,
+  OrchestrationV2ThreadSpace,
   PROVIDER_SEND_TURN_MAX_FILE_BYTES,
   type ExecutionEnvironmentDescriptor,
 } from "@t3tools/contracts";
@@ -263,6 +264,7 @@ export const make = Effect.gen(function* () {
       threadAutoSettleOptOut: true,
       threadProjectFromScratch: true,
       threadSpaces: true,
+      threadSpaceIds: OrchestrationV2ThreadSpace.literals,
       threadTitleRegeneration: true,
       commandOutputStreaming: true,
       threadVisitedTracking: true,

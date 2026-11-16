@@ -1,41 +1,44 @@
-import type { OrchestrationV2ThreadSpace } from "@t3tools/contracts";
-import { TicketIcon } from "lucide-react";
+import { isOrchestrationV2ThreadSpace, type OrchestrationV2ThreadSpace } from "@t3tools/contracts";
+import { BotIcon, CodeIcon, type LucideIcon, TicketIcon } from "lucide-react";
 import { memo } from "react";
 
 import { useNowMinute } from "../../hooks/useNowMinute";
 import { cn } from "../../lib/utils";
 import { useDelegatedUnderParent, useServerConfigs, useThreadShells } from "../../state/entities";
-import { otherThreadSpace, THREAD_SPACE_LABELS, useSidebarSpace } from "../../threadSpace";
+import { switchableThreadSpaces, THREAD_SPACE_LABELS, useSidebarSpace } from "../../threadSpace";
 import { useUiStateStore } from "../../uiStateStore";
 import { openDevSupportTicketDialog } from "../DevSupportTicketDialog";
 import { Button } from "../ui/button";
 import { Toggle, ToggleGroup } from "../ui/toggle-group";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { resolveSpaceAttention, type SpaceAttention } from "./spaceAttention.logic";
 
-/** Switches the sidebar between the Development and Dev support thread spaces. */
+const SPACE_ICONS: Record<OrchestrationV2ThreadSpace, LucideIcon> = {
+  development: CodeIcon,
+  support: TicketIcon,
+  automation: BotIcon,
+};
+
+/** Switches the sidebar between thread spaces. */
 export const SidebarSpaceSwitch = memo(function SidebarSpaceSwitch() {
   const space = useSidebarSpace();
   const setSidebarSpace = useUiStateStore((state) => state.setSidebarSpace);
-  const serverConfigs = useServerConfigs();
-  const supported = [...serverConfigs.values()].some(
-    (config) => config.environment.capabilities.threadSpaces === true,
-  );
-  // Keep the switch while the support view is open, so it cannot strand the
-  // user there if the capability disappears (e.g. a downgraded server).
-  if (!supported && space === "development") return null;
+  const shown = switchableThreadSpaces(useServerConfigs().values(), space);
+  if (shown.length === 0) return null;
   return (
     <div className="mb-1.5 flex flex-col gap-1.5">
       <ToggleGroup
         aria-label="Thread space"
-        className="w-full *:flex-1"
+        className="w-full *:data-pressed:flex-1"
         value={[space]}
         onValueChange={(next) => {
           const value = next[0];
-          if (value === "development" || value === "support") setSidebarSpace(value);
+          if (isOrchestrationV2ThreadSpace(value)) setSidebarSpace(value);
         }}
       >
-        <SpaceToggle space="development" current={space} />
-        <SpaceToggle space="support" current={space} />
+        {shown.map((candidate) => (
+          <SpaceToggle key={candidate} space={candidate} current={space} />
+        ))}
       </ToggleGroup>
       {space === "support" ? (
         <Button variant="outline" size="sm" onClick={openDevSupportTicketDialog}>
@@ -54,12 +57,26 @@ function SpaceToggle({
   readonly space: OrchestrationV2ThreadSpace;
   readonly current: OrchestrationV2ThreadSpace;
 }) {
+  const Icon = SPACE_ICONS[space];
+  const label = THREAD_SPACE_LABELS[space];
+  if (space === current) {
+    return (
+      <Toggle value={space}>
+        <Icon />
+        {label}
+      </Toggle>
+    );
+  }
+  // Three names do not fit the sidebar, so hidden spaces show their icon and badge.
   return (
-    <Toggle value={space}>
-      {THREAD_SPACE_LABELS[space]}
-      {/* The view on screen already shows its own statuses; only the hidden one needs a badge. */}
-      {space === otherThreadSpace(current) ? <HiddenSpaceBadge space={space} /> : null}
-    </Toggle>
+    <Tooltip>
+      <TooltipTrigger render={<Toggle value={space} />}>
+        <Icon />
+        <span className="sr-only">{label}</span>
+        <HiddenSpaceBadge space={space} />
+      </TooltipTrigger>
+      <TooltipPopup side="bottom">{label}</TooltipPopup>
+    </Tooltip>
   );
 }
 
@@ -80,7 +97,7 @@ function HiddenSpaceBadge({ space }: { readonly space: OrchestrationV2ThreadSpac
     <span
       aria-label={`${attention.count} waiting in ${THREAD_SPACE_LABELS[space]}`}
       className={cn(
-        "ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-3xs font-semibold text-white tabular-nums",
+        "inline-flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-3xs font-semibold text-white tabular-nums",
         attention.status.dotClass,
       )}
     >

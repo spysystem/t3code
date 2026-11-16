@@ -1,5 +1,6 @@
 import {
   CommandId,
+  orchestrationV2ThreadSpaceOf,
   MessageId,
   ThreadId,
   OrchestratorMcpFailure,
@@ -274,7 +275,8 @@ export const layer = McpToolAccess.toLayer(ProjectToolkit, {
             )?.supportedRuntimeModes,
           });
         }
-        const space = input.space ?? caller?.space;
+        const space =
+          input.space ?? (caller === undefined ? undefined : orchestrationV2ThreadSpaceOf(caller));
         const result = yield* ThreadMessageIntake.launchThread({
           commandId,
           threadId,
