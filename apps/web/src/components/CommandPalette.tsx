@@ -292,7 +292,7 @@ import {
 } from "@t3tools/client-runtime/state/project-grouping";
 import { buildSidebarProjectPickerEntries } from "../sidebarProjectGrouping";
 import { useUiStateStore } from "../uiStateStore";
-import { otherThreadSpace, threadSpaceLabel } from "../threadSpace";
+import { switchableThreadSpaces, threadSpaceLabel } from "../threadSpace";
 import { openDevSupportTicketDialog } from "./DevSupportTicketDialog";
 import { PullRequestGlyph } from "~/components/pullRequest/pullRequestIcons";
 import { readPullRequestListPreferences } from "~/components/pullRequest/pullRequestListPreferences";
@@ -1620,23 +1620,22 @@ function OpenCommandPaletteDialog(props: {
     },
   });
 
-  // Offered where the sidebar shows its switch, and always from Dev support so it cannot strand you.
-  if (
-    sidebarSpace === "support" ||
-    [...serverConfigs.values()].some((config) => config.environment.capabilities.threadSpaces)
-  ) {
+  // The same spaces the sidebar switch offers, so the palette cannot strand you either.
+  const switchableSpaces = switchableThreadSpaces(serverConfigs.values(), sidebarSpace);
+  for (const space of switchableSpaces) {
+    if (space === sidebarSpace) continue;
     actionItems.push({
       kind: "action",
-      value: "action:switch-thread-space",
-      searchTerms: ["dev support", "support", "development", "space", "switch", "tickets"],
-      title: gt("Switch to {space}", {
-        space: threadSpaceLabel(otherThreadSpace(sidebarSpace), messages),
-      }),
+      value: `action:switch-thread-space:${space}`,
+      searchTerms: [threadSpaceLabel(space, messages).toLowerCase(), space, "space", "switch"],
+      title: gt("Switch to {space}", { space: threadSpaceLabel(space, messages) }),
       icon: <ArrowRightLeftIcon className={ITEM_ICON_CLASS} />,
       run: async () => {
-        setSidebarSpace(otherThreadSpace(sidebarSpace));
+        setSidebarSpace(space);
       },
     });
+  }
+  if (switchableSpaces.includes("support")) {
     actionItems.push({
       kind: "action",
       value: "action:start-from-ticket",
