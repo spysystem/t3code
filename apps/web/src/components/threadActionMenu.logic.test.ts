@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { buildThreadActionMenuItems, type ThreadActionMenuState } from "./threadActionMenu.logic";
+import {
+  buildThreadActionMenuItems,
+  threadActionMoveTarget,
+  type ThreadActionMenuState,
+} from "./threadActionMenu.logic";
+import { environmentThreadSpaces } from "../threadSpace";
 
 const baseState: ThreadActionMenuState = {
   canOperate: true,
@@ -20,7 +25,7 @@ const baseState: ThreadActionMenuState = {
     snooze: true,
     pinning: true,
     titleRegeneration: true,
-    spaces: false,
+    spaces: [],
   },
   snoozePresets: [
     { id: "hour", label: "In 1 hour", whenLabel: "3:00 PM", snoozedUntil: "2026-08-07T15:00:00Z" },
@@ -87,15 +92,26 @@ describe("buildThreadActionMenuItems", () => {
     expect(supported).toContain("copy-native-thread-id");
   });
 
-  it("offers the move to the other space only where the server supports spaces", () => {
-    const label = (space: "development" | "support") =>
+  it("offers a move to each space the thread's server stores", () => {
+    const moveTo = (spaces: ThreadActionMenuState["supports"]["spaces"]) =>
       buildThreadActionMenuItems({
         ...baseState,
-        space,
-        supports: { ...baseState.supports, spaces: true },
-      }).find((item) => item.id === "move-space")?.label;
-    expect(label("development")).toBe("Move to Dev support");
-    expect(label("support")).toBe("Move to Development");
+        space: "support",
+        supports: { ...baseState.supports, spaces },
+      })
+        .find((item) => item.id === "move-space")
+        ?.children?.map((child) => [child.label, child.checked, threadActionMoveTarget(child.id)]);
+    expect(moveTo(["development", "support", "automation"])).toEqual([
+      ["Development", false, "development"],
+      ["Dev support", true, "support"],
+      ["Automation", false, "automation"],
+    ]);
+    // A SPY server from before Automation rejects it.
+    expect(moveTo(environmentThreadSpaces({ threadSpaces: true }))).toEqual([
+      ["Development", false, "development"],
+      ["Dev support", true, "support"],
+    ]);
+    expect(threadActionMoveTarget("move-space")).toBeNull();
     expect(ids(baseState)).not.toContain("move-space");
   });
 

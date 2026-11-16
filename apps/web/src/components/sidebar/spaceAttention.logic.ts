@@ -11,14 +11,23 @@ import {
   type ThreadStatusPill,
 } from "../Sidebar.logic";
 
+type WaitingStatuses = ReadonlyArray<ThreadStatusPill["label"]>;
+
 // Statuses that wait on the user, most urgent first. Working and connecting
 // threads do not: they need nobody until they finish.
-const WAITING_ON_USER: ReadonlyArray<ThreadStatusPill["label"]> = [
+const DEFAULT_WAITING_ON_USER: WaitingStatuses = [
   "Pending Approval",
   "Awaiting Input",
   "Plan Ready",
   "Completed",
 ];
+
+const WAITING_ON_USER: Record<OrchestrationV2ThreadSpace, WaitingStatuses> = {
+  development: DEFAULT_WAITING_ON_USER,
+  support: DEFAULT_WAITING_ON_USER,
+  // Every bot follow-up ends unread, so an unseen completion would keep the badge lit.
+  automation: ["Pending Approval", "Awaiting Input", "Failed", "Plan Ready"],
+};
 
 export interface SpaceAttention {
   readonly count: number;
@@ -34,6 +43,7 @@ export function resolveSpaceAttention(input: {
   readonly localLastVisitedAtByKey: Readonly<Record<string, string>>;
   readonly now: string;
 }): SpaceAttention {
+  const waiting = WAITING_ON_USER[input.space];
   let count = 0;
   let mostUrgent: ThreadStatusPill | null = null;
   for (const thread of filterSidebarV2VisibleThreads(
@@ -50,10 +60,10 @@ export function resolveSpaceAttention(input: {
       input.localLastVisitedAtByKey[key],
     );
     const status = resolveThreadStatusPill({ thread: { ...thread, lastVisitedAt } });
-    const urgency = status === null ? -1 : WAITING_ON_USER.indexOf(status.label);
+    const urgency = status === null ? -1 : waiting.indexOf(status.label);
     if (urgency === -1) continue;
     count += 1;
-    if (mostUrgent === null || urgency < WAITING_ON_USER.indexOf(mostUrgent.label)) {
+    if (mostUrgent === null || urgency < waiting.indexOf(mostUrgent.label)) {
       mostUrgent = status;
     }
   }

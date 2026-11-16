@@ -12267,8 +12267,6 @@
   "25704c96f90ffd3e": "Development",
   "7f7e6d5434237efe": "Switch to {space}",
   "81e970ec32df90c6": "Failed to move thread",
-  "7d630260f89fe10d": "Move to Development",
-  "6baf10f050ffa6e8": "Move to Dev support",
   "f1836c49140bef04": "Moved to {space}",
   "ef9a8200316ed44b": "Thread space",
   "3fb2c7b83bab7ea3": "{count} waiting in {space}",
@@ -12304,5 +12302,7 @@
       "t": "ScheduledRelativeLabel",
       "i": 1
     }
-  ]
+  ],
+  "f3fda8a27f9df05c": "Automation",
+  "871158f9c4d8779f": "Move to"
 }
