@@ -1,4 +1,9 @@
-import { CommandId, type ModelSelection, type ThreadId } from "@t3tools/contracts";
+import {
+  CommandId,
+  type ModelSelection,
+  orchestrationV2ThreadSpaceFields,
+  type ThreadId,
+} from "@t3tools/contracts";
 import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
@@ -539,7 +544,7 @@ export function createThreadEnvironmentAtoms<R, E>(
     })),
     setSpace: optimistic.wrap(commands.setSpace, (thread, input) => ({
       ...thread,
-      space: input.space,
+      ...orchestrationV2ThreadSpaceFields(input.space),
     })),
     pin: optimistic.wrap(commands.pin, (thread, input, now) => ({
       ...thread,

@@ -146,6 +146,7 @@ function commandThreadIds(command: OrchestrationV2Command): ReadonlyArray<Thread
     case "thread.guest-message.dismiss":
     case "thread.settle":
     case "thread.auto-settle":
+    case "thread.auto-snooze":
     case "thread.unsettle":
     case "thread.snooze":
     case "thread.unsnooze":

@@ -16,6 +16,9 @@ import {
   OrchestrationV2ThreadHistoryPage,
   OrchestrationV2TurnItem,
   OrchestrationV2TurnItemJson,
+  OrchestrationV2AppThreadJson,
+  orchestrationV2ThreadSpaceFields,
+  orchestrationV2ThreadSpaceOf,
 } from "./orchestrationV2.ts";
 
 const now = DateTime.makeUnsafe("2026-04-20T00:00:00.000Z");
@@ -455,6 +458,40 @@ describe("orchestration V2 contracts", () => {
     expect(runtimeThread.pendingBackgroundTasks).toEqual([]);
     expect(runtimeThread.contextUsage).toBeNull();
     expect(runtimeThread.nativeMetadata).toBeNull();
+  });
+});
+
+const StoredSpace = Schema.fromJsonString(
+  OrchestrationV2AppThreadJson.mapFields(({ space, addedSpace }) => ({ space, addedSpace })),
+);
+const encodeStoredSpace = Schema.encodeSync(StoredSpace);
+const decodeStoredSpace = Schema.decodeSync(StoredSpace);
+// The thread's space field as SPY builds before Automation decode it.
+const decodeBeforeAutomation = Schema.decodeSync(
+  Schema.fromJsonString(
+    Schema.Struct({ space: Schema.optional(Schema.Literals(["development", "support"])) }),
+  ),
+);
+
+describe("stored thread spaces", () => {
+  it("stores Automation where builds before it read Development, and moves back cleanly", () => {
+    const automation = encodeStoredSpace(orchestrationV2ThreadSpaceFields("automation"));
+    expect(JSON.parse(automation)).toEqual({ addedSpace: "automation" });
+    expect(decodeBeforeAutomation(automation)).toEqual({});
+    expect(orchestrationV2ThreadSpaceOf(decodeStoredSpace(automation))).toBe("automation");
+
+    const support = encodeStoredSpace({
+      ...decodeStoredSpace(automation),
+      ...orchestrationV2ThreadSpaceFields("support"),
+    });
+    expect(JSON.parse(support)).toEqual({ space: "support" });
+  });
+
+  it("reads a space added by a newer build as the space older builds see", () => {
+    const decode = (json: object) =>
+      orchestrationV2ThreadSpaceOf(decodeStoredSpace(JSON.stringify(json)));
+    expect(decode({ addedSpace: "later-space" })).toBe("development");
+    expect(decode({ space: "support", addedSpace: "later-space" })).toBe("support");
   });
 });
 
