@@ -11,6 +11,7 @@ import {
   OrchestrationV2RunStatus,
   OrchestrationV2ThreadLaunchWorkspaceStrategy,
   OrchestrationV2ThreadSpace,
+  ORCHESTRATION_V2_THREAD_SPACE_SUMMARY,
   RuntimeMode,
   ProviderInteractionMode,
   Project,
@@ -146,8 +147,7 @@ const ThreadLaunchTool = Tool.make("t3_thread_launch", {
     generateTitle: Schema.optional(Schema.Boolean),
     space: Schema.optional(
       OrchestrationV2ThreadSpace.annotate({
-        description:
-          'Space for the new thread: "development" or "support" (Dev support). Omit to use the calling thread\'s space.',
+        description: `Space for the new thread: ${ORCHESTRATION_V2_THREAD_SPACE_SUMMARY}. Omit to use the calling thread's space.`,
       }),
     ),
     modelSelection: Schema.optional(ModelSelection),

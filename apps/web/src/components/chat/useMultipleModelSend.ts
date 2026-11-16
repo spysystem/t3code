@@ -108,7 +108,7 @@ export function useMultipleModelSend(input: MultipleModelSendInput) {
   }: {
     readonly threadId: ThreadId;
     readonly project: EnvironmentProject;
-    readonly space: OrchestrationV2ThreadSpace;
+    readonly space: OrchestrationV2ThreadSpace | undefined;
     readonly branch: string;
     readonly selections: ReadonlyArray<ModelSelection>;
     readonly targets: ReadonlyArray<MultipleModelTarget>;
@@ -195,7 +195,7 @@ export function useMultipleModelSend(input: MultipleModelSendInput) {
                   bootstrap: {
                     createThread: {
                       projectId: project.id,
-                      space,
+                      ...(space === undefined ? {} : { space }),
                       title,
                       modelSelection: target.selection,
                       runtimeMode,

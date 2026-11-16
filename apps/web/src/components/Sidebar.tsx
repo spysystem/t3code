@@ -186,6 +186,7 @@ import {
   buildDraftActionMenuItems,
   buildThreadActionMenuItems,
   isThreadTriageAction,
+  threadActionMoveTarget,
   threadActionRequiresOperate,
 } from "./threadActionMenu.logic";
 import {
@@ -268,7 +269,7 @@ import { SidebarContent, SidebarGroup, useSidebar } from "./ui/sidebar";
 import { SidebarChromeFooter, SidebarChromeHeader } from "./sidebar/SidebarChrome";
 import { SidebarUsageSummary } from "./sidebar/SidebarUsageSummary";
 import { SidebarSpaceSwitch } from "./sidebar/SidebarSpaceSwitch";
-import { otherThreadSpace, threadSpaceOf, useSidebarSpace } from "../threadSpace";
+import { environmentThreadSpaces, threadSpaceOf, useSidebarSpace } from "../threadSpace";
 import { SidebarHeaderIconButton, SidebarThreadHeader } from "./sidebar/SidebarThreadHeader";
 import { SidebarEnvironmentFilter } from "./sidebar/SidebarEnvironmentFilter";
 import { resolveSidebarScope } from "./Sidebar.scope";
@@ -2829,9 +2830,9 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                 nativeThreadId:
                   serverConfigs.get(thread.environmentId)?.environment.capabilities
                     .nativeThreadId === true,
-                spaces:
-                  serverConfigs.get(thread.environmentId)?.environment.capabilities.threadSpaces ===
-                  true,
+                spaces: environmentThreadSpaces(
+                  serverConfigs.get(thread.environmentId)?.environment.capabilities,
+                ),
               },
               snoozePresets,
             }),
@@ -2856,6 +2857,22 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
                   thread.environmentId,
                 );
           if (preset) attemptSnooze(threadRef, preset);
+          return;
+        }
+        const moveTo = threadActionMoveTarget(clicked.value);
+        if (moveTo !== null) {
+          if (moveTo === threadSpaceOf(thread)) return;
+          const result = await setThreadSpace(threadRef, moveTo);
+          if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+            const error = squashAtomCommandFailure(result);
+            toastManager.add(
+              stackedThreadToast({
+                type: "error",
+                title: gt("Failed to move thread"),
+                description: error instanceof Error ? error.message : gt("An error occurred."),
+              }),
+            );
+          }
           return;
         }
         switch (clicked.value) {
@@ -2969,20 +2986,6 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
           case "mark-unread":
             markThreadUnread(threadRef);
             return;
-          case "move-space": {
-            const result = await setThreadSpace(threadRef, otherThreadSpace(threadSpaceOf(thread)));
-            if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
-              const error = squashAtomCommandFailure(result);
-              toastManager.add(
-                stackedThreadToast({
-                  type: "error",
-                  title: gt("Failed to move thread"),
-                  description: error instanceof Error ? error.message : gt("An error occurred."),
-                }),
-              );
-            }
-            return;
-          }
           case "copy-path":
             if (!threadWorkspacePath) {
               toastManager.add(
