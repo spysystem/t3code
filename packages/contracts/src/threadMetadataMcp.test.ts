@@ -11,6 +11,10 @@ describe("ThreadMetadataMcpUpdateInput", () => {
       action: "set_space",
       space: "support",
     });
+    assert.deepEqual(decodeUpdate({ action: "set_space", space: "automation" }), {
+      action: "set_space",
+      space: "automation",
+    });
     assert.throws(() => decodeUpdate({ action: "set_space" }));
     assert.throws(() => decodeUpdate({ action: "set_space", space: "elsewhere" }));
     assert.throws(() => decodeUpdate({ action: "rename", title: "Moved", space: "support" }));

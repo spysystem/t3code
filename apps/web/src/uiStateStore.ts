@@ -1,5 +1,9 @@
 import { Debouncer } from "@tanstack/react-pacer";
-import { type OrchestrationV2ThreadSpace, PullRequestMergeMethod } from "@t3tools/contracts";
+import {
+  isOrchestrationV2ThreadSpace,
+  type OrchestrationV2ThreadSpace,
+  PullRequestMergeMethod,
+} from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 import { create } from "zustand";
 import { normalizeProjectPathForComparison } from "@t3tools/client-runtime/state/projects";
@@ -162,7 +166,9 @@ export function parsePersistedState(parsed: PersistedUiState): UiState {
       parsed.sidebarProjectScopeKeys ?? [parsed.sidebarProjectScopeKey],
     ),
     sidebarEnvironmentScopeId: sanitizeOptionalKey(parsed.sidebarEnvironmentScopeId),
-    sidebarSpace: parsed.sidebarSpace === "support" ? "support" : "development",
+    sidebarSpace: isOrchestrationV2ThreadSpace(parsed.sidebarSpace)
+      ? parsed.sidebarSpace
+      : "development",
     pullRequestMergeMethod: isPullRequestMergeMethod(parsed.pullRequestMergeMethod)
       ? parsed.pullRequestMergeMethod
       : initialState.pullRequestMergeMethod,

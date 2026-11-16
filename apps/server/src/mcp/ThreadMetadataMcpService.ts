@@ -1,5 +1,6 @@
 import {
   CommandId,
+  orchestrationV2ThreadSpaceOf,
   OrchestratorMcpFailure,
   type OrchestrationV2AppThread,
   type OrchestrationV2Command,
@@ -95,7 +96,13 @@ function resultFromThread(input: {
   readonly sequence: number;
   readonly thread: Pick<
     OrchestrationV2AppThread,
-    "id" | "title" | "titleRegeneration" | "linkedPullRequest" | "space" | "updatedAt"
+    | "id"
+    | "title"
+    | "titleRegeneration"
+    | "linkedPullRequest"
+    | "space"
+    | "addedSpace"
+    | "updatedAt"
   >;
 }): ThreadMetadataMcpUpdateResult {
   return {
@@ -112,7 +119,7 @@ function resultFromThread(input: {
             startedAt: DateTime.formatIso(input.thread.titleRegeneration.startedAt),
           },
     linkedPullRequest: input.thread.linkedPullRequest ?? null,
-    space: input.thread.space ?? "development",
+    space: orchestrationV2ThreadSpaceOf(input.thread),
     updatedAt: DateTime.formatIso(input.thread.updatedAt),
   };
 }

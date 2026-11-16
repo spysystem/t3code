@@ -61,20 +61,36 @@ and worktree while you stay in the new thread composer. This requires a Git proj
 ## Keep support work apart
 
 On web and desktop, the switch at the top of the sidebar shows one space at a time:
-**Development** or **Dev support**. The command palette's **Switch to** action flips it
-too. Each thread belongs to one. A badge on the hidden space counts its threads that
-wait on you: an approval, a question, a ready plan, or a finished turn you have not
-opened. Settled and snoozed threads do not count.
+**Development**, **Dev support**, or **Automation**. The command palette's **Switch to**
+actions change it too. Each thread belongs to one. A badge on each hidden space counts
+its threads that wait on you: an approval, a question, a ready plan, or a finished turn
+you have not opened. Settled and snoozed threads do not count.
 
 A thread you start lands in the space the sidebar shows. A thread started from another
 thread, such as a fork or a thread an agent launches, keeps that thread's space. Threads
 started from mobile or by scheduled tasks land in Development.
-To move a thread, choose **Move to Dev support** or **Move to Development** from its
-menu; it keeps its place in the list. Opening a thread from the other space, for
-example from a notification, switches the sidebar to that space.
+To move a thread, choose a space under **Move to** in its menu; it keeps its place in
+the list. Opening a thread from another space, for example from a notification,
+switches the sidebar to that space.
 
 The switch appears once a connected environment supports spaces. Mobile lists threads
-from both spaces together.
+from all spaces together.
+
+### Automation
+
+**Automation** is for threads that bots run, such as a pull request review bot. A bot
+puts its threads there by launching them with `space: "automation"`, and threads those
+threads launch stay there. Every bot follow-up ends unread, so the Automation badge
+skips finished turns. It counts approvals, questions, ready plans, and failed runs that
+you have not opened.
+
+When a turn in an Automation thread finishes and the thread does not wait on you, the
+server snoozes it for a year. No approval, question, or ready plan is waiting, and the
+run did not fail. Every client lists it under Snoozed, including mobile apps that do
+not know spaces. An approval, a new question, or a failed run wakes it as it would wake
+any snoozed thread. A thread is left alone when it is pinned or settled, or when anyone
+opened it, woke it, or wrote to it during the turn that just ended. A thread you are
+reading stays where it is; the next quiet turn after you leave snoozes it again.
 
 ### Start from a ticket
 
