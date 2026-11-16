@@ -1,6 +1,8 @@
 import { assert, it } from "@effect/vitest";
 import {
   CommandId,
+  type OrchestrationV2ThreadSpace,
+  orchestrationV2ThreadSpaceOf,
   ProjectId,
   ProviderDriverKind,
   ProviderInstanceId,
@@ -38,7 +40,7 @@ const layerTest = Layer.mergeAll(
   ),
 );
 
-const createThread = (threadId: ThreadId, space?: "development" | "support") =>
+const createThread = (threadId: ThreadId, space?: OrchestrationV2ThreadSpace) =>
   Effect.gen(function* () {
     const orchestrator = yield* Orchestrator.OrchestratorV2;
     yield* orchestrator.dispatch({
@@ -68,10 +70,10 @@ it.effect("creates a thread in the requested space and moves it without reorderi
     const created = yield* projections.getThreadShell(threadId);
     assert.ok(created);
     assert.equal(created.space, "support");
-    const listedSpace = Effect.map(
-      projections.listActiveThreads(),
-      (entries) => entries.find((entry) => entry.id === threadId)?.space,
-    );
+    const listedSpace = Effect.map(projections.listActiveThreads(), (entries) => {
+      const entry = entries.find((candidate) => candidate.id === threadId);
+      return entry === undefined ? undefined : orchestrationV2ThreadSpaceOf(entry);
+    });
     assert.equal(yield* listedSpace, "support");
 
     yield* TestClock.adjust("1 minute");
@@ -88,6 +90,22 @@ it.effect("creates a thread in the requested space and moves it without reorderi
     assert.equal(yield* listedSpace, "development");
     assert.equal(
       DateTime.toEpochMillis(moved.updatedAt),
+      DateTime.toEpochMillis(created.updatedAt),
+    );
+
+    yield* orchestrator.dispatch({
+      type: "thread.metadata.update",
+      commandId: CommandId.make("move-to-automation"),
+      threadId,
+      space: "automation",
+    });
+    const automated = yield* projections.getThreadShell(threadId);
+    assert.ok(automated);
+    assert.equal(orchestrationV2ThreadSpaceOf(automated), "automation");
+    assert.equal(automated.space, undefined);
+    assert.equal(yield* listedSpace, "automation");
+    assert.equal(
+      DateTime.toEpochMillis(automated.updatedAt),
       DateTime.toEpochMillis(created.updatedAt),
     );
   }).pipe(Effect.provide(layerTest)),

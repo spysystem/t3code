@@ -40,6 +40,7 @@ import {
   OrchestrationV2CreationSource,
   OrchestrationV2DelegatedFrom,
   OrchestrationV2ThreadSpace,
+  ORCHESTRATION_V2_THREAD_SPACE_SUMMARY,
   OrchestrationV2RunStatus,
   OrchestrationV2TurnItemStatus,
 } from "./orchestrationV2.ts";
@@ -367,7 +368,7 @@ export const OrchestratorMcpThreadListInput = Schema.Struct({
   snoozed: Schema.optional(Schema.Boolean),
   space: Schema.optional(
     OrchestrationV2ThreadSpace.annotate({
-      description: 'Only threads in this space: "development" or "support" (Dev support).',
+      description: `Only threads in this space: ${ORCHESTRATION_V2_THREAD_SPACE_SUMMARY}.`,
     }),
   ),
   includeSubagents: Schema.optional(Schema.Boolean),

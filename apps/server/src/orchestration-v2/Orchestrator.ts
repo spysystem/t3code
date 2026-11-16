@@ -28,6 +28,8 @@ import {
   type GuestMessageId,
   isCompactionCommandMessage,
   isOrchestrationV2WorkActive,
+  orchestrationV2ThreadSpaceFields,
+  orchestrationV2ThreadSpaceOf,
   isProviderNativeSubagentThread,
   MessageId,
   type NodeId,
@@ -643,6 +645,7 @@ function commandThreadId(command: OrchestrationV2ServerCommand): ThreadId {
     case "thread.guest-message.dismiss":
     case "thread.settle":
     case "thread.auto-settle":
+    case "thread.auto-snooze":
     case "thread.unsettle":
     case "thread.snooze":
     case "thread.unsnooze":
@@ -3803,7 +3806,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       interactionMode: command.interactionMode,
       branch: command.branch,
       worktreePath: command.worktreePath,
-      ...(command.space === undefined ? {} : { space: command.space }),
+      ...(command.space === undefined ? {} : orchestrationV2ThreadSpaceFields(command.space)),
       activeProviderThreadId: null,
       pullRequests: [],
       ...(command.linkOrigin === undefined ? {} : { linkOrigin: command.linkOrigin }),
@@ -4916,7 +4919,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
               : command.regenerateTitle === false || command.title !== undefined
                 ? { titleRegeneration: null }
                 : {}),
-            ...(command.space === undefined ? {} : { space: command.space }),
+            ...(command.space === undefined ? {} : orchestrationV2ThreadSpaceFields(command.space)),
             // Moving between spaces is organization, not activity: a move on its
             // own keeps updatedAt so the thread does not jump to the top of a space.
             updatedAt: isSpaceOnlyMetadataUpdate(command) ? thread.updatedAt : now,
@@ -15007,6 +15010,44 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
             commandId: command.commandId,
             threadId: command.threadId,
             ...(command.settledAt === undefined ? {} : { settledAt: command.settledAt }),
+          },
+          events,
+          effects,
+        );
+        break;
+      }
+      case "thread.auto-snooze": {
+        // Recheck live state: anything the user did since the reactor's read wins over the snooze.
+        const thread = yield* projectionStore
+          .getThread(command.threadId)
+          .pipe(
+            Effect.mapError(
+              (cause) => new OrchestratorProjectionError({ threadId: command.threadId, cause }),
+            ),
+          );
+        const turnBeganMs = DateTime.toEpochMillis(command.turnBeganAt);
+        const touchedSinceTurnBegan = [thread.lastVisitedAt, thread.lastSnoozeWakeAt].some(
+          (at) => at != null && DateTime.toEpochMillis(at) >= turnBeganMs,
+        );
+        if (
+          orchestrationV2ThreadSpaceOf(thread) !== "automation" ||
+          thread.settledOverride === "settled" ||
+          thread.pinnedAt != null ||
+          touchedSinceTurnBegan ||
+          DateTime.toEpochMillis(thread.updatedAt) > DateTime.toEpochMillis(command.snapshotAt)
+        ) {
+          return yield* new OrchestratorDispatchError({
+            commandId: command.commandId,
+            commandType: command.type,
+            cause: `Thread ${command.threadId} changed before the automatic snooze.`,
+          });
+        }
+        yield* dispatchThreadMutation(
+          {
+            type: "thread.snooze",
+            commandId: command.commandId,
+            threadId: command.threadId,
+            snoozedUntil: command.snoozedUntil,
           },
           events,
           effects,

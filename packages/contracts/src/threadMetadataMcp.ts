@@ -7,7 +7,10 @@ import {
   ThreadId,
   TrimmedNonEmptyString,
 } from "./baseSchemas.ts";
-import { OrchestrationV2ThreadSpace } from "./orchestrationV2.ts";
+import {
+  ORCHESTRATION_V2_THREAD_SPACE_SUMMARY,
+  OrchestrationV2ThreadSpace,
+} from "./orchestrationV2.ts";
 import { ThreadLinkedPullRequest } from "./threadPullRequest.ts";
 import { ThreadTitleRegeneration } from "./threadTitle.ts";
 
@@ -49,8 +52,7 @@ export const ThreadMetadataMcpUpdateInput = Schema.Struct({
   action: ThreadMetadataMcpAction,
   title: Schema.optional(ThreadMetadataTitle),
   space: Schema.optional(OrchestrationV2ThreadSpace).annotate({
-    description:
-      'Required only when action is set_space: "development" or "support" (Dev support).',
+    description: `Required only when action is set_space: ${ORCHESTRATION_V2_THREAD_SPACE_SUMMARY}.`,
   }),
   clientRequestId: Schema.optional(ThreadMetadataClientRequestId),
 }).check(
