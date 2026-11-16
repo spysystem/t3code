@@ -1,5 +1,6 @@
 import {
   CommandId,
+  orchestrationV2ThreadSpaceOf,
   type RunId,
   idleCompactionOf,
   isProviderAvailable,
@@ -1040,7 +1041,7 @@ function listItemFromShell(
     interactionMode: shell.interactionMode,
     linkedPullRequest: shell.linkedPullRequest ?? null,
     ...threadPullRequests(shell.pullRequests),
-    space: shell.space ?? "development",
+    space: orchestrationV2ThreadSpaceOf(shell),
     ...threadSettlement(shell),
     ...threadSnooze(shell, nowMs),
     pinned: shell.pinnedAt != null,
@@ -3454,7 +3455,7 @@ const make = Effect.gen(function* () {
                   commandId,
                   threadId,
                   projectId: parent.thread.projectId,
-                  ...(parent.thread.space === undefined ? {} : { space: parent.thread.space }),
+                  space: orchestrationV2ThreadSpaceOf(parent.thread),
                   title,
                   ...(request.title?.trim() ? { titleRenamed: true } : {}),
                   modelSelection: target.modelSelection,
@@ -3624,7 +3625,8 @@ const make = Effect.gen(function* () {
             input.settled === undefined || threadSettlement(thread).settled === input.settled,
         )
         .filter(
-          (thread) => input.space === undefined || (thread.space ?? "development") === input.space,
+          (thread) =>
+            input.space === undefined || orchestrationV2ThreadSpaceOf(thread) === input.space,
         )
         .filter(
           (thread) =>

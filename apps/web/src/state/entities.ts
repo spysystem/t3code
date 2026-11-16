@@ -25,6 +25,7 @@ import type {
   OrchestrationV2ProjectedTurnItem,
   OrchestrationV2RemoteTaskChild,
   OrchestrationV2ThreadShell,
+  OrchestrationV2ThreadSpace,
   NodeId,
   ThreadId,
   TurnItemId,
@@ -32,6 +33,7 @@ import type {
 import type { ThreadCheckpointSummary } from "@t3tools/client-runtime/state/thread-checkpoints";
 import { Atom } from "effect/reactivity";
 import { appAtomRegistry } from "../rpc/atomRegistry";
+import { environmentThreadSpaces } from "../threadSpace";
 import { environmentProjects } from "./projects";
 import { environmentPresentations } from "./presentation";
 import { environmentServerConfigsAtom } from "./server";
@@ -400,11 +402,12 @@ export function readEnvironmentSupportsAutoSettleOptOut(environmentId: Environme
   );
 }
 
-/** Whether the environment's server stores thread spaces. */
-export function readEnvironmentSupportsSpaces(environmentId: EnvironmentId): boolean {
-  return (
-    appAtomRegistry.get(environmentServerConfigsAtom).get(environmentId)?.environment.capabilities
-      .threadSpaces === true
+/** The thread spaces the environment's server stores. */
+export function readEnvironmentThreadSpaces(
+  environmentId: EnvironmentId,
+): ReadonlyArray<OrchestrationV2ThreadSpace> {
+  return environmentThreadSpaces(
+    appAtomRegistry.get(environmentServerConfigsAtom).get(environmentId)?.environment.capabilities,
   );
 }
 

@@ -9,6 +9,7 @@ import * as DatabaseStorage from "./persistence/DatabaseStorage.ts";
 import * as StorageCleanup from "./storageCleanup.ts";
 import * as PullRequestSyncReactor from "./orchestration-v2/PullRequestSyncReactor.ts";
 import * as PullRequestWatchReactor from "./orchestration-v2/PullRequestWatchReactor.ts";
+import * as AutomationSnoozeReactor from "./orchestration-v2/AutomationSnoozeReactor.ts";
 import * as DelegatedTaskQuestionReactor from "./orchestration-v2/DelegatedTaskQuestionReactor.ts";
 import * as MilestoneHub from "./milestones/MilestoneHub.ts";
 import * as OrchestrationMilestones from "./milestones/OrchestrationMilestones.ts";
@@ -779,6 +780,12 @@ const layerRuntimeCoreDependenciesBase = Layer.mergeAll(
       yield* (yield* OrchestrationMilestones.OrchestrationMilestones).start();
     }),
   ).pipe(Layer.provide(OrchestrationMilestones.layer), Layer.provide(ProjectionStoreV2.layer)),
+  Layer.effectDiscard(
+    Effect.gen(function* () {
+      const service = yield* AutomationSnoozeReactor.AutomationSnoozeReactor;
+      yield* service.start();
+    }),
+  ).pipe(Layer.provide(AutomationSnoozeReactor.layer), Layer.provide(ProjectionStoreV2.layer)),
   ProviderUsageLimitsIngestion.layer,
   layerProviderInstallationRefresh,
   ProviderInstallation.layer,
