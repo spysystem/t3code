@@ -92,12 +92,15 @@ function Get-MissingFromStable {
     # a changed patch-id can only be a fork change; across bases, upstream context changes it too.
     $base = Get-UpstreamBase $Commit
     $sourceBase = Get-UpstreamBase 'origin/spy/stable-source'
+    $stable = @(Invoke-Checked git @('log', '--format=%s', "$(Get-UpstreamBase 'origin/spy/stable')..origin/spy/stable"))
+    $fork = @(Get-ForkPatches $Commit $base)
     if ($sourceBase -ne $base) {
-        throw "spy/stable-source is on upstream $($sourceBase.Substring(0, 10)), this candidate on $($base.Substring(0, 10)). A Nightly sync moves spy/stable-source to the synced spy/main when Stable was current before it; otherwise rebuild spy/stable (docs/spy/releasing.md)."
+        @($fork | Where-Object { $stable -cnotcontains $_.Subject } | ForEach-Object { $_.Subject })
+        "unverified fork changes: spy/stable-source is on upstream $($sourceBase.Substring(0, 10)), this candidate on $($base.Substring(0, 10)). A Nightly sync moves spy/stable-source to the synced spy/main when Stable was current before it; otherwise rebuild spy/stable (docs/spy/releasing.md). A candidate built before the last sync needs a new build."
+        return
     }
     $source = @(Get-ForkPatches 'origin/spy/stable-source' $base | ForEach-Object { $_.PatchId })
-    $stable = @(Invoke-Checked git @('log', '--format=%s', "$(Get-UpstreamBase 'origin/spy/stable')..origin/spy/stable"))
-    @(Get-ForkPatches $Commit $base | Where-Object { $source -notcontains $_.PatchId -or $stable -cnotcontains $_.Subject } |
+    @($fork | Where-Object { $source -notcontains $_.PatchId -or $stable -cnotcontains $_.Subject } |
         ForEach-Object { $_.Subject })
 }
 
