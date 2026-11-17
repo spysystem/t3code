@@ -2,7 +2,7 @@
 setlocal
 rem Build a local test candidate. Publish its exact files only after testing.
 rem spy/stable builds a Stable candidate; other branches build a Windows-only Nightly one.
-rem Usage: release-desktop.cmd [--next-version | VERSION | --publish CANDIDATE_DIRECTORY]
+rem Usage: release-desktop.cmd [--next-version | VERSION | --publish CANDIDATE_DIRECTORY [--allow-stable-lag]]
 rem Each branch exits outside a parenthesized block: a bare exit /b inside one reports 0.
 cd /d "%~dp0.."
 if /i "%~1"=="--publish" goto publish
@@ -14,8 +14,14 @@ exit /b %errorlevel%
 
 :publish
 if "%~2"=="" goto usage
+if not "%~4"=="" goto usage
+if /i "%~3"=="--allow-stable-lag" goto publish_lagging
 if not "%~3"=="" goto usage
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\publish-spy-desktop.ps1 -CandidateDirectory "%~2"
+exit /b %errorlevel%
+
+:publish_lagging
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\publish-spy-desktop.ps1 -CandidateDirectory "%~2" -AllowStableLag
 exit /b %errorlevel%
 
 :next_version
@@ -27,5 +33,5 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\publish-spy-desktop.
 exit /b %errorlevel%
 
 :usage
-echo Usage: release-desktop.cmd [--next-version ^| VERSION ^| --publish CANDIDATE_DIRECTORY]
+echo Usage: release-desktop.cmd [--next-version ^| VERSION ^| --publish CANDIDATE_DIRECTORY [--allow-stable-lag]]
 exit /b 1

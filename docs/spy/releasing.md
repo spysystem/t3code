@@ -45,6 +45,20 @@ including an interrupted build, reserves its version on that machine. This keeps
 installers distinguishable during testing. Published versions may therefore skip suffixes;
 an unpublished candidate does not need its own GitHub release.
 
+A fork change released on Nightly is released on Stable too, even when upstream has no new
+stable release. After merging into `spy/main`, rebuild `spy/stable` on its current stable tag:
+
+```sh
+git branch -f spy/stable spy/main
+git -c rerere.enabled=true rebase --onto <stable-tag> <nightly-tag> spy/stable
+```
+
+Then build a candidate from each branch, test both, and push and publish both. Publishing a
+Nightly candidate refuses while the pushed `spy/stable` lacks one of its fork commits, compared
+by subject. For a feature that needs upstream code newer than the stable tag, publish with
+`--allow-stable-lag` and name the held-back feature in the handoff; it reaches Stable with the
+next upstream stable release.
+
 The version names the upstream release the stack sits on: the script reads the channel's tag
 at `git merge-base HEAD upstream/main` and refuses to build when there is none, so fetch
 upstream tags and rebase onto a tagged release. It then chooses the next `spy.N` suffix for that
@@ -69,7 +83,8 @@ of an ambient skip-build setting.
 The tracked `scripts\release-desktop.cmd` launcher invokes
 `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\publish-spy-desktop.ps1`. Despite
 the historical filename, the default is build-only. `--publish DIRECTORY` supplies
-`-CandidateDirectory DIRECTORY`; `--next-version` supplies `-NextVersion`, and an explicit
+`-CandidateDirectory DIRECTORY` (and `--allow-stable-lag` after it supplies `-AllowStableLag`);
+`--next-version` supplies `-NextVersion`, and an explicit
 version supplies `-Version VERSION`.
 The candidate builder builds Linux in WSL, then calls `.t3\build-desktop-win.cmd` without arguments
 for Windows. That local helper only builds Windows; it does not publish releases. When recreating

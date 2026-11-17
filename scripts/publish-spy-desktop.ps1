@@ -10,7 +10,9 @@ param(
     [Parameter(ParameterSetName = 'Build')]
     [string]$LinuxBuildDirectory = '',
     [Parameter(Mandatory, ParameterSetName = 'Publish')]
-    [string]$CandidateDirectory
+    [string]$CandidateDirectory,
+    [Parameter(ParameterSetName = 'Publish')]
+    [switch]$AllowStableLag
 )
 
 $ErrorActionPreference = 'Stop'
@@ -53,6 +55,19 @@ function Get-ReleaseTags {
 function Get-Channel {
     if ((Invoke-Checked git @('branch', '--show-current')) -eq 'spy/stable') { return 'stable' }
     return 'nightly'
+}
+
+function Get-MissingFromStable {
+    param([string]$Commit)
+    # Fork commits are identified by subject: rebasing onto another upstream tag changes their hashes.
+    Invoke-Checked git @('fetch', '--quiet', 'origin', '+refs/heads/spy/stable:refs/remotes/origin/spy/stable')
+    $stack = {
+        param([string]$Tip)
+        $base = (Invoke-Checked git @('merge-base', $Tip, 'upstream/main')).Trim()
+        @(Invoke-Checked git @('log', '--format=%s', "$base..$Tip"))
+    }
+    $stable = & $stack 'origin/spy/stable'
+    @(& $stack $Commit | Where-Object { $stable -cnotcontains $_ })
 }
 
 function Get-ReleaseTag {
@@ -137,6 +152,13 @@ function Publish-Candidate {
         -not ($nightly -or $candidate.version -match $stableVersionPattern) -or
         $candidate.sourceCommit -notmatch '^[0-9a-f]{40}$') {
         throw 'Invalid desktop candidate manifest.'
+    }
+    # A fork feature ships on both channels; only an explicit hold-back lets Nightly go first.
+    if ($nightly -and -not $AllowStableLag) {
+        $missing = @(Get-MissingFromStable $candidate.sourceCommit)
+        if ($missing.Count -gt 0) {
+            throw "spy/stable lacks fork commits this Nightly ships: $($missing -join '; '). Rebuild spy/stable from spy/main and build a Stable candidate (docs/spy/releasing.md), or pass --allow-stable-lag for a feature held back until the next upstream stable release."
+        }
     }
     $tag = Get-ReleaseTag $candidate.version
     $branch = if ($nightly) { 'spy/main' } else { 'spy/stable' }
@@ -331,6 +353,12 @@ On an Apple Silicon Mac, build and install the latest release from source: ``cur
     Write-Host "Test installer: $installer"
     Write-Host "Candidate directory: $outputDirectory"
     Write-Host 'Nothing published. After installation and testing, ask to publish this candidate.'
+    if ($channel -eq 'nightly') {
+        $missing = @(Get-MissingFromStable $commit)
+        if ($missing.Count -gt 0) {
+            Write-Warning "spy/stable lacks: $($missing -join '; '). Rebuild spy/stable from spy/main and build a Stable candidate too; publishing this Nightly requires it."
+        }
+    }
 }
 finally {
     if ($null -ne $releaseLock) { $releaseLock.Dispose() }

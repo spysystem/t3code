@@ -45,9 +45,10 @@ short, linear commit stack, one per [release channel](releasing.md):
 - `spy/main` (Nightly) sits on upstream's latest nightly tag. Fork work happens here. Fetch
   upstream with tags before starting and rebase onto its latest nightly tag before finalizing.
 - `spy/stable` (Stable) is the same stack rebased onto upstream's latest stable tag `vX.Y.Z`,
-  rebuilt from `spy/main` for each upstream stable release. It differs from `spy/main` only by
-  conflict resolutions against the older base; a feature needing newer upstream code waits for
-  the next stable release.
+  rebuilt from `spy/main` for each upstream stable release and whenever `spy/main` gains or
+  changes a fork commit, so a merged feature ships on both channels together. It differs from
+  `spy/main` only by conflict resolutions against its base; a feature needing upstream code newer
+  than the stable tag is held back until the next stable release.
 
 Keep local `main` aligned with `upstream/main` by fast-forward; preserve and investigate any
 unique local commits.
