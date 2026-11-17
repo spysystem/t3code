@@ -57,17 +57,22 @@ function Get-Channel {
     return 'nightly'
 }
 
-function Get-ForkStack {
+function Get-UpstreamBase {
     param([string]$Tip)
-    $base = (Invoke-Checked git @('merge-base', $Tip, 'upstream/main')).Trim()
-    # A patch-id survives a clean rebase onto another upstream tag; a fix folded into the commit changes it.
+    (Invoke-Checked git @('merge-base', $Tip, 'upstream/main')).Trim()
+}
+
+function Get-ForkPatches {
+    param([string]$Tip, [string]$Base)
     $patchIds = @{}
-    foreach ($line in @(Invoke-Checked cmd.exe @('/d', '/c', "git log -p --format=medium $base..$Tip | git patch-id --stable"))) {
+    foreach ($line in @(Invoke-Checked cmd.exe @('/d', '/c', "git log -p --format=medium $Base..$Tip | git patch-id --stable"))) {
         $patchId, $commitId = $line -split ' '
         $patchIds[$commitId] = $patchId
     }
-    foreach ($line in @(Invoke-Checked git @('log', '--format=%H %s', "$base..$Tip"))) {
+    foreach ($line in @(Invoke-Checked git @('log', '--format=%H %s', "$Base..$Tip"))) {
         $commitId, $subject = $line -split ' ', 2
+        # cmd.exe reports only the last exit code of the pipe, so a failed git log -p shows up here.
+        if (-not $patchIds.ContainsKey($commitId)) { throw "No patch-id for $commitId ($subject)." }
         [pscustomobject]@{ Subject = $subject; PatchId = $patchIds[$commitId] }
     }
 }
@@ -83,11 +88,16 @@ function Get-MissingFromStable {
     catch {
         throw "Could not fetch origin spy/stable and spy/stable-source, and upstream main ($($_.Exception.Message)). The upstream remote must be pingdotgg/t3code; spy/stable-source is pushed with each spy/stable rebuild (docs/spy/releasing.md)."
     }
-    # spy/stable-source is the spy/main commit spy/stable was rebuilt from: its patch-ids catch folded
-    # fixes, and spy/stable's own subjects catch features left out there. Rebasing changes hashes only.
-    $source = @(Get-ForkStack 'origin/spy/stable-source' | ForEach-Object { $_.PatchId })
-    $stable = @(Get-ForkStack 'origin/spy/stable' | ForEach-Object { $_.Subject })
-    @(Get-ForkStack $Commit | Where-Object { $source -notcontains $_.PatchId -or $stable -cnotcontains $_.Subject } |
+    # spy/stable-source is the spy/main commit spy/stable was rebuilt from. On the same upstream base,
+    # a changed patch-id can only be a fork change; across bases, upstream context changes it too.
+    $base = Get-UpstreamBase $Commit
+    $sourceBase = Get-UpstreamBase 'origin/spy/stable-source'
+    if ($sourceBase -ne $base) {
+        throw "spy/stable-source is on upstream $($sourceBase.Substring(0, 10)), this candidate on $($base.Substring(0, 10)). A Nightly sync moves spy/stable-source to the synced spy/main when Stable was current before it; otherwise rebuild spy/stable (docs/spy/releasing.md)."
+    }
+    $source = @(Get-ForkPatches 'origin/spy/stable-source' $base | ForEach-Object { $_.PatchId })
+    $stable = @(Invoke-Checked git @('log', '--format=%s', "$(Get-UpstreamBase 'origin/spy/stable')..origin/spy/stable"))
+    @(Get-ForkPatches $Commit $base | Where-Object { $source -notcontains $_.PatchId -or $stable -cnotcontains $_.Subject } |
         ForEach-Object { $_.Subject })
 }
 
@@ -176,7 +186,11 @@ function Publish-Candidate {
     }
     # A fork change ships on both channels; only an explicit hold-back lets Nightly go first.
     if ($nightly) {
-        $missing = @(Get-MissingFromStable $candidate.sourceCommit)
+        try { $missing = @(Get-MissingFromStable $candidate.sourceCommit) }
+        catch {
+            if (-not $AllowStableLag) { throw }
+            $missing = @("comparison failed: $($_.Exception.Message)")
+        }
         if ($missing.Count -gt 0 -and -not $AllowStableLag) {
             throw "spy/stable lacks these fork commits, or an older version of them: $($missing -join '; '). Rebuild spy/stable from spy/main and build a Stable candidate (docs/spy/releasing.md), or pass --allow-stable-lag for a feature held back until the next upstream stable release."
         }

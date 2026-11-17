@@ -54,15 +54,20 @@ it came from as `spy/stable-source`:
 stable_tag=$(git describe --tags --abbrev=0 --match 'v[0-9]*' --exclude '*-*' upstream/main)
 git branch -f spy/stable spy/main
 git -c rerere.enabled=true rebase --onto "$stable_tag" "$(git merge-base spy/main upstream/main)" spy/stable
-git push --force-with-lease origin spy/stable "$(git rev-parse spy/main):refs/heads/spy/stable-source"
+git push --atomic --force-with-lease=spy/stable:<inspected-sha> \
+  --force-with-lease=spy/stable-source:<inspected-sha> \
+  origin spy/stable "$(git rev-parse spy/main):refs/heads/spy/stable-source"
 ```
 
 Then build a candidate from each branch, test both, and publish both. Publishing a Nightly
 candidate refuses while one of its fork commits is missing from `spy/stable` by subject, or has
-a different patch-id in `spy/stable-source`. A Nightly build warns about the same before it
-starts. For a feature that needs upstream code newer than the stable tag, publish with
-`--allow-stable-lag`, which prints what Stable lacks; name the held-back feature in the handoff.
-It reaches Stable with the next upstream stable release.
+a different patch-id than in `spy/stable-source`. Patch-ids include context lines, so they are
+compared only on the same upstream base. A Nightly sync therefore moves `spy/stable-source` to
+the synced `spy/main` in the same atomic push when Stable was current before the sync, and
+rebuilds `spy/stable` when it was not. A Nightly build warns before it starts. For a feature
+that needs upstream code newer than the stable tag, publish with `--allow-stable-lag`, which
+prints what Stable lacks; name the held-back feature in the handoff. It reaches Stable with the
+next upstream stable release.
 
 The version names the upstream release the stack sits on: the script reads the channel's tag
 at `git merge-base HEAD upstream/main` and refuses to build when there is none, so fetch
