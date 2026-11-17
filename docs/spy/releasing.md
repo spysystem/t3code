@@ -46,18 +46,23 @@ installers distinguishable during testing. Published versions may therefore skip
 an unpublished candidate does not need its own GitHub release.
 
 A fork change released on Nightly is released on Stable too, even when upstream has no new
-stable release. After merging into `spy/main`, rebuild `spy/stable` on its current stable tag:
+stable release; that includes fixes folded into an existing commit. After a merge into
+`spy/main`, rebuild `spy/stable` on upstream's latest stable tag and record the `spy/main` commit
+it came from as `spy/stable-source`:
 
 ```sh
+stable_tag=$(git describe --tags --abbrev=0 --match 'v[0-9]*' --exclude '*-*' upstream/main)
 git branch -f spy/stable spy/main
-git -c rerere.enabled=true rebase --onto <stable-tag> <nightly-tag> spy/stable
+git -c rerere.enabled=true rebase --onto "$stable_tag" "$(git merge-base spy/main upstream/main)" spy/stable
+git push --force-with-lease origin spy/stable "$(git rev-parse spy/main):refs/heads/spy/stable-source"
 ```
 
-Then build a candidate from each branch, test both, and push and publish both. Publishing a
-Nightly candidate refuses while the pushed `spy/stable` lacks one of its fork commits, compared
-by subject. For a feature that needs upstream code newer than the stable tag, publish with
-`--allow-stable-lag` and name the held-back feature in the handoff; it reaches Stable with the
-next upstream stable release.
+Then build a candidate from each branch, test both, and publish both. Publishing a Nightly
+candidate refuses while one of its fork commits is missing from `spy/stable` by subject, or has
+a different patch-id in `spy/stable-source`. A Nightly build warns about the same before it
+starts. For a feature that needs upstream code newer than the stable tag, publish with
+`--allow-stable-lag`, which prints what Stable lacks; name the held-back feature in the handoff.
+It reaches Stable with the next upstream stable release.
 
 The version names the upstream release the stack sits on: the script reads the channel's tag
 at `git merge-base HEAD upstream/main` and refuses to build when there is none, so fetch

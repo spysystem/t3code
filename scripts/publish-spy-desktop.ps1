@@ -57,17 +57,38 @@ function Get-Channel {
     return 'nightly'
 }
 
+function Get-ForkStack {
+    param([string]$Tip)
+    $base = (Invoke-Checked git @('merge-base', $Tip, 'upstream/main')).Trim()
+    # A patch-id survives a clean rebase onto another upstream tag; a fix folded into the commit changes it.
+    $patchIds = @{}
+    foreach ($line in @(Invoke-Checked cmd.exe @('/d', '/c', "git log -p --format=medium $base..$Tip | git patch-id --stable"))) {
+        $patchId, $commitId = $line -split ' '
+        $patchIds[$commitId] = $patchId
+    }
+    foreach ($line in @(Invoke-Checked git @('log', '--format=%H %s', "$base..$Tip"))) {
+        $commitId, $subject = $line -split ' ', 2
+        [pscustomobject]@{ Subject = $subject; PatchId = $patchIds[$commitId] }
+    }
+}
+
 function Get-MissingFromStable {
     param([string]$Commit)
-    # Fork commits are identified by subject: rebasing onto another upstream tag changes their hashes.
-    Invoke-Checked git @('fetch', '--quiet', 'origin', '+refs/heads/spy/stable:refs/remotes/origin/spy/stable')
-    $stack = {
-        param([string]$Tip)
-        $base = (Invoke-Checked git @('merge-base', $Tip, 'upstream/main')).Trim()
-        @(Invoke-Checked git @('log', '--format=%s', "$base..$Tip"))
+    try {
+        foreach ($branch in 'spy/stable', 'spy/stable-source') {
+            Invoke-Checked git @('fetch', '--quiet', 'origin', "+refs/heads/${branch}:refs/remotes/origin/$branch")
+        }
+        Invoke-Checked git @('fetch', '--quiet', 'upstream', '+refs/heads/main:refs/remotes/upstream/main')
     }
-    $stable = & $stack 'origin/spy/stable'
-    @(& $stack $Commit | Where-Object { $stable -cnotcontains $_ })
+    catch {
+        throw "Could not fetch origin spy/stable and spy/stable-source, and upstream main ($($_.Exception.Message)). The upstream remote must be pingdotgg/t3code; spy/stable-source is pushed with each spy/stable rebuild (docs/spy/releasing.md)."
+    }
+    # spy/stable-source is the spy/main commit spy/stable was rebuilt from: its patch-ids catch folded
+    # fixes, and spy/stable's own subjects catch features left out there. Rebasing changes hashes only.
+    $source = @(Get-ForkStack 'origin/spy/stable-source' | ForEach-Object { $_.PatchId })
+    $stable = @(Get-ForkStack 'origin/spy/stable' | ForEach-Object { $_.Subject })
+    @(Get-ForkStack $Commit | Where-Object { $source -notcontains $_.PatchId -or $stable -cnotcontains $_.Subject } |
+        ForEach-Object { $_.Subject })
 }
 
 function Get-ReleaseTag {
@@ -153,11 +174,14 @@ function Publish-Candidate {
         $candidate.sourceCommit -notmatch '^[0-9a-f]{40}$') {
         throw 'Invalid desktop candidate manifest.'
     }
-    # A fork feature ships on both channels; only an explicit hold-back lets Nightly go first.
-    if ($nightly -and -not $AllowStableLag) {
+    # A fork change ships on both channels; only an explicit hold-back lets Nightly go first.
+    if ($nightly) {
         $missing = @(Get-MissingFromStable $candidate.sourceCommit)
+        if ($missing.Count -gt 0 -and -not $AllowStableLag) {
+            throw "spy/stable lacks these fork commits, or an older version of them: $($missing -join '; '). Rebuild spy/stable from spy/main and build a Stable candidate (docs/spy/releasing.md), or pass --allow-stable-lag for a feature held back until the next upstream stable release."
+        }
         if ($missing.Count -gt 0) {
-            throw "spy/stable lacks fork commits this Nightly ships: $($missing -join '; '). Rebuild spy/stable from spy/main and build a Stable candidate (docs/spy/releasing.md), or pass --allow-stable-lag for a feature held back until the next upstream stable release."
+            Write-Warning "Publishing with --allow-stable-lag. Name these in the handoff; spy/stable lacks them or an older version of them: $($missing -join '; ')"
         }
     }
     $tag = Get-ReleaseTag $candidate.version
@@ -276,6 +300,17 @@ try {
         $buildEnvironment[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
         [Environment]::SetEnvironmentVariable($name, $environment[$name], 'Process')
     }
+    if ($channel -eq 'nightly') {
+        # Advice only: publishing repeats the check strictly.
+        try { $missing = @(Get-MissingFromStable $commit) }
+        catch {
+            $missing = @()
+            Write-Warning "Could not compare with spy/stable: $($_.Exception.Message)"
+        }
+        if ($missing.Count -gt 0) {
+            Write-Warning "spy/stable lacks these fork commits, or an older version of them: $($missing -join '; '). Rebuild spy/stable from spy/main and build a Stable candidate too; publishing this Nightly requires it."
+        }
+    }
     Write-Host "Building local $channel test candidate $Version from $commit"
     New-Item -ItemType Directory -Path $outputDirectory > $null
     $linuxArtifacts = @()
@@ -353,12 +388,6 @@ On an Apple Silicon Mac, build and install the latest release from source: ``cur
     Write-Host "Test installer: $installer"
     Write-Host "Candidate directory: $outputDirectory"
     Write-Host 'Nothing published. After installation and testing, ask to publish this candidate.'
-    if ($channel -eq 'nightly') {
-        $missing = @(Get-MissingFromStable $commit)
-        if ($missing.Count -gt 0) {
-            Write-Warning "spy/stable lacks: $($missing -join '; '). Rebuild spy/stable from spy/main and build a Stable candidate too; publishing this Nightly requires it."
-        }
-    }
 }
 finally {
     if ($null -ne $releaseLock) { $releaseLock.Dispose() }

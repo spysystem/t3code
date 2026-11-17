@@ -46,7 +46,8 @@ short, linear commit stack, one per [release channel](releasing.md):
   upstream with tags before starting and rebase onto its latest nightly tag before finalizing.
 - `spy/stable` (Stable) is the same stack rebased onto upstream's latest stable tag `vX.Y.Z`,
   rebuilt from `spy/main` for each upstream stable release and whenever `spy/main` gains or
-  changes a fork commit, so a merged feature ships on both channels together. It differs from
+  changes a fork commit, so a merged change ships on both channels together. `spy/stable-source`
+  records the `spy/main` commit of the last rebuild. It differs from
   `spy/main` only by conflict resolutions against its base; a feature needing upstream code newer
   than the stable tag is held back until the next stable release.
 
