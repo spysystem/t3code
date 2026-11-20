@@ -169,6 +169,15 @@ describe("evaluatePullRequestWatch", () => {
     assert.isTrue(baseline.next.conflicting);
     assert.isTrue(baseline.next.rebaseRequired);
     assert.deepEqual(evaluatePullRequestWatch(baseline.next, broken, noRemarks).changes, []);
+    // A watch started from a head the caller handled baselines only that head.
+    const handled = (headSha: string) =>
+      evaluatePullRequestWatch(watch({ awaitingBaseline: "all", headSha }), broken, noRemarks);
+    assert.deepEqual(handled("aaaaaaaaaa").changes, []);
+    assert.deepEqual(handled("9999999999").changes, [
+      { kind: "checks-failed", failed: [check("lint", "failure")] },
+      { kind: "conflicting" },
+      { kind: "needs-rebase" },
+    ]);
 
     const failed = evaluatePullRequestWatch(
       baseline.next,

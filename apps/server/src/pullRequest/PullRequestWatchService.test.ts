@@ -115,6 +115,7 @@ interface HarnessOptions {
   readonly readFailure?: PullRequestService.PullRequestError;
   readonly readState?: PullRequestSummary["state"];
   readonly readChecksState?: PullRequestSummary["checksState"];
+  readonly readHeadSha?: string;
 }
 
 const makeHarness = Effect.fn("makePullRequestWatchHarness")(function* (
@@ -148,6 +149,7 @@ const makeHarness = Effect.fn("makePullRequestWatchHarness")(function* (
               ...(options.readChecksState !== undefined && {
                 checksState: options.readChecksState,
               }),
+              ...(options.readHeadSha !== undefined && { headSha: options.readHeadSha }),
               headBranch: "feature",
               baseBranch: "main",
               updatedAt: "2026-08-20T00:00:00.000Z",
@@ -160,8 +162,8 @@ const makeHarness = Effect.fn("makePullRequestWatchHarness")(function* (
   );
   return {
     commands,
-    setWatching: (watching: boolean, target: PullRequestTarget) =>
-      service.setWatching({ threadId: THREAD_ID, target, watching }),
+    setWatching: (watching: boolean, target: PullRequestTarget, handledHeadSha?: string) =>
+      service.setWatching({ threadId: THREAD_ID, target, watching, handledHeadSha }),
   };
 });
 
@@ -202,6 +204,40 @@ describe("PullRequestWatchService", () => {
           checksPending,
         );
       }
+    }),
+  );
+
+  // Watches compare heads exactly, so the handled head takes the host's spelling of the current one.
+  it.effect.each([
+    [
+      "a full head the host abbreviates",
+      "abc1234ddddddddddddddddddddddddddddddddd",
+      { readHeadSha: "abc1234ddddd" },
+      "abc1234ddddd",
+    ],
+    [
+      "an older head",
+      "abc1234ddddddddddddddddddddddddddddddddd",
+      { readHeadSha: "9999999999999999999999999999999999999999" },
+      "abc1234ddddddddddddddddddddddddddddddddd",
+    ],
+    // GitHub's summary carries no head.
+    [
+      "a head the read does not report",
+      "ABC1234DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD",
+      {},
+      "abc1234ddddddddddddddddddddddddddddddddd",
+    ],
+  ] as const)("starts a new watch from %s", ([, handled, options, expected]) =>
+    Effect.gen(function* () {
+      const harness = yield* makeHarness(options);
+      yield* harness.setWatching(
+        true,
+        { url: "https://github.com/t3tools/t3code/pull/9" },
+        handled,
+      );
+      const [command] = yield* Ref.get(harness.commands);
+      expect(command?.type === "thread.pull-request.watch" ? command.headSha : null).toBe(expected);
     }),
   );
 
