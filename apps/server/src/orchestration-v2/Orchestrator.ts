@@ -5326,14 +5326,14 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
                 : withUntil(
                     existing.watch ?? {
                       startedAt,
-                      headSha: null,
+                      headSha: command.headSha ?? null,
                       failedChecks: [],
                       passed: false,
                       passedChecks: [],
                       conflicting: false,
                       // Watching again must not repeat check or conflict news the last watch told.
                       ...(existing.endedWatch && {
-                        headSha: existing.endedWatch.headSha,
+                        headSha: existing.endedWatch.headSha ?? command.headSha ?? null,
                         failedChecks: existing.endedWatch.failedChecks,
                         passed: existing.endedWatch.passed,
                         passedChecks: existing.endedWatch.passedChecks,
