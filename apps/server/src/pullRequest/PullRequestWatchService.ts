@@ -63,6 +63,12 @@ export class PullRequestWatchThreadNotFoundError extends Schema.TaggedError<Pull
   }
 }
 
+// Watches compare heads exactly, and Bitbucket reports a full head in 12 characters.
+function startingHead(handled: string | undefined, current: string | undefined) {
+  const head = handled?.toLowerCase();
+  return head !== undefined && current !== undefined && head.startsWith(current) ? current : head;
+}
+
 export class PullRequestWatchService extends Context.Service<
   PullRequestWatchService,
   {
@@ -71,6 +77,8 @@ export class PullRequestWatchService extends Context.Service<
       readonly target: PullRequestTarget;
       readonly watching: boolean;
       readonly until?: PullRequestWatchUntil | undefined;
+      /** The head the caller already handled; a new watch starts from it. */
+      readonly handledHeadSha?: string | undefined;
     }) => Effect.Effect<
       ResolvedTarget & { readonly watching: boolean; readonly wasWatching: boolean },
       | PullRequestWatchFailedError
@@ -107,6 +115,7 @@ const make = Effect.gen(function* () {
     readonly target: PullRequestTarget;
     readonly watching: boolean;
     readonly until?: PullRequestWatchUntil | undefined;
+    readonly handledHeadSha?: string | undefined;
   }) {
     const { watching } = input;
     const thread = yield* requireThread(input.threadId);
@@ -128,8 +137,9 @@ const make = Effect.gen(function* () {
     }
     // A pending rollup has no failure yet, so any failure the first read finds is news.
     let checksPendingAtStart: boolean | undefined;
+    let startHead: string | undefined;
     if (watching && before?.watch === undefined) {
-      checksPendingAtStart = yield* pullRequests
+      const read = yield* pullRequests
         .summary(
           {
             projectId: thread.projectId,
@@ -141,10 +151,9 @@ const make = Effect.gen(function* () {
           { recoverTransientFailure: false, bypassCache: true },
         )
         .pipe(
-          Effect.flatMap((summary) =>
-            summary.state === "merged"
-              ? Effect.fail(new PullRequestNotOpenError({ state: "merged" }))
-              : Effect.succeed(summary.checksState === "pending"),
+          Effect.filterOrFail(
+            (summary) => summary.state !== "merged",
+            () => new PullRequestNotOpenError({ state: "merged" }),
           ),
           Effect.catchTags({
             // Host and transport errors can recover while the watch is active.
@@ -152,6 +161,8 @@ const make = Effect.gen(function* () {
             PullRequestOperationError: () => Effect.undefined,
           }),
         );
+      checksPendingAtStart = read && read.checksState === "pending";
+      startHead = startingHead(input.handledHeadSha, read?.headSha);
     }
     const uuid = yield* random.uuidV4().pipe(Effect.orDie);
     yield* engine
@@ -165,6 +176,7 @@ const make = Effect.gen(function* () {
         watching,
         ...(watching ? { link: { url: target.url, source: "agent" as const } } : {}),
         ...(watching && input.until !== undefined && { until: input.until }),
+        ...(startHead !== undefined && { headSha: startHead }),
         ...(watching && checksPendingAtStart !== undefined
           ? { checksPending: checksPendingAtStart }
           : {}),
