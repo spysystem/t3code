@@ -5815,6 +5815,110 @@ it.layer(layerTest)("OrchestrationV2LayerLive lifecycle", (it) => {
     }),
   );
 
+  // A push can land, and its checks finish, between the caller's last read and its first watch.
+  it.effect.each([
+    [
+      "wakes for a push past the handled head whose checks passed",
+      "success",
+      "#12: checks passed",
+      false,
+    ],
+    [
+      "wakes for a push past the handled head whose checks failed",
+      "failure",
+      "#12: checks failed",
+      false,
+    ],
+    [
+      "wakes for a push past the handled head after a watch that never read",
+      "success",
+      "#12: checks passed",
+      true,
+    ],
+    ["baselines the handled head's own finished checks", "success", null, false],
+  ] as const)("%s before the first read", ([, status, wake, resumed]) =>
+    Effect.gen(function* () {
+      const orchestrator = yield* Orchestrator.OrchestratorV2;
+      const worker = yield* EffectWorker.OrchestrationEffectWorkerV2;
+      const suffix = `${wake === null ? "same" : "moved"}-${status}-${resumed}`;
+      const threadId = ThreadId.make(`runtime-pull-request-watch-handled-${suffix}`);
+      const projectId = ProjectId.make(`pr-watch-handled-project-${suffix}`);
+      yield* seedProject({
+        projectId,
+        title: "Watch handled head",
+        workspaceRoot: "/workspace/watch-handled",
+        defaultModelSelection: null,
+        createdAt: "2026-10-01T00:00:00.000Z",
+      });
+      yield* orchestrator.dispatch({
+        type: "thread.create",
+        createdBy: "user",
+        creationSource: "web",
+        commandId: CommandId.make(`pr-watch-handled-create-${suffix}`),
+        threadId,
+        projectId,
+        title: "Watch handled head",
+        modelSelection,
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        branch: null,
+        worktreePath: null,
+      });
+      const handled = "982c155aaa";
+      const pushed = wake === null ? handled : "fcf4890bbb";
+      const watch = (id: string, watching: boolean, headSha?: string) =>
+        orchestrator.dispatch({
+          type: "thread.pull-request.watch",
+          commandId: CommandId.make(`pr-watch-handled-${id}-${suffix}`),
+          threadId,
+          host: "github.com",
+          repository: "pingdotgg/t3code",
+          number: 12,
+          watching,
+          ...(headSha !== undefined && { headSha }),
+          link: { url: "https://github.com/pingdotgg/t3code/pull/12", source: "agent" },
+        });
+      if (resumed) {
+        yield* watch("first", true);
+        yield* watch("ended", false);
+      }
+      yield* watch("start", true, handled);
+      const host = Layer.mergeAll(
+        NodeServices.layer,
+        NodeCrypto.layer,
+        Layer.mock(PullRequestService.PullRequestService)({
+          detail: () =>
+            Effect.succeed({
+              ...watchedPullRequestDetail({
+                projectId,
+                number: 12,
+                at: "2026-10-02T12:00:00.000Z",
+              }),
+              headSha: pushed,
+              checks: [{ name: "review", status, description: null, url: null, required: false }],
+            }),
+          activity: () =>
+            Effect.succeed({
+              comments: [],
+              commentCount: 0,
+              commentsTruncated: false,
+              reviewThreads: [],
+              commits: [],
+            }),
+        }),
+      );
+
+      const reactor = yield* PullRequestWatchReactor.make.pipe(Effect.provide(host));
+      yield* reactor.sweep;
+      yield* worker.drain();
+      const { messages } = yield* orchestrator.getThreadRecords(threadId, ["messages"]);
+      assert.deepEqual(
+        messages.flatMap((message) => message.notification?.summary ?? []),
+        wake === null ? [] : [wake],
+      );
+    }),
+  );
+
   it.effect.each([
     ["an idle", false],
     ["a busy", true],
