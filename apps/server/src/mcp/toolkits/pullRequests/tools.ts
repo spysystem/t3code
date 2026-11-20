@@ -401,6 +401,12 @@ const WatchPullRequestInput = Schema.Struct({
         'How long this thread stays working. Omit to keep the current value; a new watch starts at "checks". "checks": until checks finish, for a PR you hand to the user. "merged": until it merges, closes or is unwatched, when you act on it yourself, such as merging after approval.',
     }),
   ),
+  headSha: Schema.optional(
+    Schema.String.check(Schema.isPattern(/^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$/u)).annotate({
+      description:
+        "Full SHA of the head you already handled, so a new watch wakes you for any later push.",
+    }),
+  ),
 });
 
 const WatchPullRequestTool = Tool.make("watch_pull_request", {

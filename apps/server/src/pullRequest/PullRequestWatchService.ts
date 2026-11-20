@@ -53,6 +53,12 @@ export class PullRequestWatchThreadNotFoundError extends Schema.TaggedError<Pull
   }
 }
 
+// Watches compare heads exactly, and Bitbucket reports a full head in 12 characters.
+function startingHead(handled: string | undefined, current: string | undefined) {
+  const head = handled?.toLowerCase();
+  return head !== undefined && current !== undefined && head.startsWith(current) ? current : head;
+}
+
 export class PullRequestWatchService extends Context.Service<
   PullRequestWatchService,
   {
@@ -61,6 +67,8 @@ export class PullRequestWatchService extends Context.Service<
       readonly target: PullRequestTarget;
       readonly watching: boolean;
       readonly until?: PullRequestWatchUntil | undefined;
+      /** The head the caller already handled; a new watch starts from it. */
+      readonly handledHeadSha?: string | undefined;
     }) => Effect.Effect<
       ResolvedTarget & {
         readonly watching: boolean;
@@ -102,6 +110,7 @@ const make = Effect.gen(function* () {
     readonly target: PullRequestTarget;
     readonly watching: boolean;
     readonly until?: PullRequestWatchUntil | undefined;
+    readonly handledHeadSha?: string | undefined;
   }) {
     const { watching } = input;
     const thread = yield* requireThread(input.threadId);
@@ -130,6 +139,7 @@ const make = Effect.gen(function* () {
     // A pending rollup has no failure yet, so any failure the first read finds is news.
     let checksPendingAtStart: boolean | undefined;
     let checksStateAtStart: PullRequestChecksState | undefined;
+    let startHead: string | undefined;
     if (watching && !wasWatching) {
       const read = yield* pullRequests
         .summary(
@@ -152,6 +162,7 @@ const make = Effect.gen(function* () {
       if (read?.state === "merged" || read?.state === "closed") return alreadyEnded(read.state);
       checksPendingAtStart = read === undefined ? undefined : read.checksState === "pending";
       checksStateAtStart = read?.checksState ?? undefined;
+      startHead = startingHead(input.handledHeadSha, read?.headSha);
     }
     const uuid = yield* random.uuidV4().pipe(Effect.orDie);
     yield* engine
@@ -165,6 +176,7 @@ const make = Effect.gen(function* () {
         watching,
         ...(watching ? { link: { url: target.url, source: "agent" as const } } : {}),
         ...(watching && input.until !== undefined && { until: input.until }),
+        ...(startHead !== undefined && { headSha: startHead }),
         ...(watching && checksPendingAtStart !== undefined
           ? { checksPending: checksPendingAtStart }
           : {}),

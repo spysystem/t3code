@@ -3622,6 +3622,8 @@ export const OrchestrationV2Command = Schema.Union([
     until: Schema.optional(PullRequestWatchUntil),
     /** Whether CI was pending with no failure yet when the watch started, so any failure is news. */
     checksPending: Schema.optional(Schema.Boolean),
+    /** The head the caller already handled. A new watch starts from it, so a later push is news. */
+    headSha: Schema.optional(TrimmedNonEmptyString),
     link: Schema.optional(
       Schema.Struct({
         url: TrimmedNonEmptyString,
