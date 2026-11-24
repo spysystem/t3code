@@ -35,6 +35,7 @@ import { Skeleton } from "../ui/skeleton";
 import { SecretInput } from "./SecretInput";
 import { SettingsRow, SettingsSection } from "./settingsLayout";
 import { useSearchableSetting } from "./settingsSearch";
+import { SpyAdminAddressRow } from "./SpyAdminAddressRow";
 
 type TrackerIcon = ElementType<{ className?: string }>;
 
@@ -87,10 +88,15 @@ export function IssueTrackerSettings({ environmentId }: { readonly environmentId
   if (trackers.length === 0) return null;
   return (
     <SettingsSection id={searchableSetting("issue-trackers").id} title={title}>
+      <SpyAdminAddressRow environmentId={environmentId} />
       {trackers.flatMap((tracker) => {
         const added = accounts.filter((account) => account.tracker === tracker.tracker);
         // Another account is added from the first one's row, which stays while any is connected.
-        const canAddAccount = canAddAccounts && (tracker.connected || added.length > 0);
+        // A tracker every project reads has no binding for a second account to serve.
+        const canAddAccount =
+          canAddAccounts &&
+          tracker.environmentScope === undefined &&
+          (tracker.connected || added.length > 0);
         return [tracker, ...added].map((account) => (
           <TrackerRow
             // Drafts belong to one environment; switching must not carry them over.

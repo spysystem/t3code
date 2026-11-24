@@ -1,6 +1,6 @@
 import { useAtomValue } from "@effect/atom-react";
 import { getThreadLink, resolveThreadLinkRules } from "@t3tools/client-runtime/thread-links";
-import type { EnvironmentId, ProjectId } from "@t3tools/contracts";
+import type { EnvironmentId, ProjectId, ThreadIssueLink } from "@t3tools/contracts";
 import { useMessages } from "gt-react";
 import { TicketIcon } from "lucide-react";
 import { serverEnvironment } from "../state/server";
@@ -10,12 +10,22 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 export function ThreadLink({
   thread,
 }: {
-  thread: { title: string; environmentId: EnvironmentId; projectId: ProjectId };
+  thread: {
+    title: string;
+    environmentId: EnvironmentId;
+    projectId: ProjectId;
+    issues?: ReadonlyArray<ThreadIssueLink> | undefined;
+  };
 }) {
   const settings = useAtomValue(serverEnvironment.settingsValueAtom(thread.environmentId));
   const m = useMessages();
   const task = getThreadLink(thread.title, resolveThreadLinkRules(settings, thread.projectId), m);
   if (task === null) return null;
+  // The linked issue's own badge already names it and opens it.
+  const linked = thread.issues?.some(
+    (link) => link.url === task.url || link.displayKey === task.text || link.key === task.text,
+  );
+  if (linked) return null;
 
   const label = task.label;
   return (

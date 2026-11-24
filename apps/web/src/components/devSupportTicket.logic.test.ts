@@ -32,6 +32,14 @@ describe("findDevSupportThread", () => {
     });
     expect(findDevSupportThread([placeholder], "12345")).toBe(placeholder);
     expect(findDevSupportThread([placeholder, fix], "12345")).toBe(fix);
+    // A thread the task is linked to wins, whatever it was renamed to and however old it is.
+    const linked = thread({
+      title: "Stock count mismatch",
+      updatedAt: "2026-09-01T09:00:00.000Z",
+      issues: [{ tracker: "spy-admin", key: "12345" }],
+    });
+    expect(findDevSupportThread([placeholder, fix, linked], "12345")).toBe(linked);
+    expect(findDevSupportThread([linked], "1234")).toBeNull();
   });
 
   it("skips archived threads, other tickets, and development threads", () => {

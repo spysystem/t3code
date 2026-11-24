@@ -41,7 +41,9 @@ import {
   waitForThreadShell,
 } from "../state/entities";
 import { useEnvironmentProviders } from "../state/environments";
+import { readSpyAdminTaskLink } from "../state/spyAdminTasks";
 import { threadEnvironment } from "../state/threads";
+import { useAtomCommand } from "../state/use-atom-command";
 import { useOrchestrationCommand } from "../state/use-orchestration-command";
 import { buildThreadRouteParams } from "../threadRoutes";
 import { useUiStateStore } from "../uiStateStore";
@@ -131,6 +133,7 @@ function DevSupportTicketDialog() {
   const startThreadTurn = useOrchestrationCommand(threadEnvironment.startTurn, {
     reportFailure: false,
   });
+  const linkIssue = useAtomCommand(threadEnvironment.linkIssue, { reportFailure: false });
   const gt = useGT();
   const navigate = useNavigate();
   // A server without spaces would drop `space` and file the thread under Development.
@@ -218,6 +221,8 @@ function DevSupportTicketDialog() {
     setBusy(true);
     const threadId = newThreadId();
     const createdAt = new Date().toISOString();
+    // Read beside the start, so the thread shows its task before the agent has opened it.
+    const task = readSpyAdminTaskLink(project.environmentId, project.id, taskId);
     // The skill investigates read-only on the project's checkout. Titled "#<id>"
     // so a second Start from ticket finds it before the skill renames it.
     const thread = {
@@ -254,6 +259,10 @@ function DevSupportTicketDialog() {
       setError(failure instanceof Error ? failure.message : gt("Could not start the thread."));
       return;
     }
+    void task.then(
+      (link) =>
+        link && linkIssue({ environmentId: project.environmentId, input: { threadId, ...link } }),
+    );
     // The thread route treats a thread the client has not received yet as
     // deleted and sends the user home, so wait for its shell first.
     const threadRef = scopeThreadRef(project.environmentId, threadId);

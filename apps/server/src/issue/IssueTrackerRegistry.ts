@@ -11,6 +11,7 @@ import {
 
 import * as BuiltInDrivers from "../sourceControl/builtInDrivers.ts";
 import * as IssueTrackerHostLive from "./IssueTrackerHostLive.ts";
+import * as SpyAdminIssueTracker from "./spyAdmin/SpyAdminIssueTracker.ts";
 
 export class IssueTrackerRegistry extends Context.Service<
   IssueTrackerRegistry,
@@ -41,7 +42,12 @@ const STANDALONE_TRACKERS = [LinearDriver.make];
 const make = Effect.gen(function* () {
   const drivers = yield* BuiltInDrivers.SourceControlDrivers;
   const standalone = yield* Effect.all(STANDALONE_TRACKERS);
-  return fromTrackers([...drivers.flatMap(({ instance }) => instance.issues ?? []), ...standalone]);
+  const spyAdmin = yield* SpyAdminIssueTracker.make;
+  return fromTrackers([
+    ...drivers.flatMap(({ instance }) => instance.issues ?? []),
+    ...standalone,
+    ...(spyAdmin === null ? [] : [spyAdmin]),
+  ]);
 });
 
 export const layer = Layer.effect(IssueTrackerRegistry, make).pipe(
