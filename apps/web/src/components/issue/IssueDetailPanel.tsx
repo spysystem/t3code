@@ -1,5 +1,6 @@
 import { RegistryContext, useAtomValue } from "@effect/atom-react";
 import { issueEventSentence, issueWriteAccess } from "@t3tools/client-runtime/issue-presentation";
+import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
 import { createIssueCommentPager } from "@t3tools/client-runtime/state/issues";
 import {
   issueAssigneeHeld,
@@ -434,7 +435,9 @@ export function IssueDetailPanel({
   const detailQuery = useEnvironmentQuery(detailAtom);
   const registry = useContext(RegistryContext);
   const [pager] = useState(() => createIssueCommentPager(detailAtom));
-  const { comments, nextCursor, loadingOlder, canLoadOlder } = useAtomValue(pager.view);
+  const { comments, olderEvents, nextCursor, loadingOlder, canLoadOlder } = useAtomValue(
+    pager.view,
+  );
   const detail = detailQuery.data;
   const canWrite = useAtomValue(issueEnvironment.comment.permissionAtom(environmentId));
   const projects = useProjects();
@@ -466,7 +469,11 @@ export function IssueDetailPanel({
 
   const timeline: ReadonlyArray<TimelineItem> = [
     ...comments.map((c): TimelineItem => ({ kind: "comment", at: c.createdAt, comment: c })),
-    ...detail.events.map((e): TimelineItem => ({ kind: "event", at: e.createdAt, event: e })),
+    ...[...olderEvents, ...detail.events].map((e): TimelineItem => ({
+      kind: "event",
+      at: e.createdAt,
+      event: e,
+    })),
   ].sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
 
   const access = issueWriteAccess(detail, canWrite, messages);
@@ -713,7 +720,10 @@ export function IssueDetailPanel({
           )}
 
           <PullRequestMetaLine className="mt-2 min-h-5 text-xs text-muted-foreground">
-            <PullRequestActorLabel actor={detail.author} />
+            {/* A missing author is a deleted account on a git host; elsewhere the tracker names none. */}
+            {detail.author !== null || sourceControlClients.find(detail.tracker) !== undefined ? (
+              <PullRequestActorLabel actor={detail.author} />
+            ) : null}
             <span>
               <T>
                 opened <Var>{formatRelativeTimeLabel(detail.createdAt, undefined, messages)}</Var>
@@ -742,35 +752,38 @@ export function IssueDetailPanel({
           />
 
           <div className="mt-4 space-y-2">
-            <PullRequestMetaRow icon={<TagIcon className="size-3.5" />} label={gt("Labels")}>
-              <span className="flex min-w-0 flex-wrap items-center gap-1">
-                {detail.labels.length === 0 ? (
-                  <span className="text-muted-foreground">
-                    <T context="no labels">None</T>
-                  </span>
-                ) : (
-                  detail.labels.map((label) => (
-                    <PullRequestLabelChip
-                      key={label.name}
-                      label={label}
-                      size="default"
-                      className="max-w-48"
+            {/* A tracker without labels has no row to show "None" in. */}
+            {detail.capabilities.labels || detail.labels.length > 0 ? (
+              <PullRequestMetaRow icon={<TagIcon className="size-3.5" />} label={gt("Labels")}>
+                <span className="flex min-w-0 flex-wrap items-center gap-1">
+                  {detail.labels.length === 0 ? (
+                    <span className="text-muted-foreground">
+                      <T context="no labels">None</T>
+                    </span>
+                  ) : (
+                    detail.labels.map((label) => (
+                      <PullRequestLabelChip
+                        key={label.name}
+                        label={label}
+                        size="default"
+                        className="max-w-48"
+                      />
+                    ))
+                  )}
+                  {detail.capabilities.labels ? (
+                    <IssueLabelPicker
+                      environmentId={environmentId}
+                      reference={reference}
+                      detail={detail}
+                      allowed={canLabel}
+                      disabledReason={
+                        blocked ?? gt("Changing labels needs triage access on this tracker.")
+                      }
                     />
-                  ))
-                )}
-                {detail.capabilities.labels ? (
-                  <IssueLabelPicker
-                    environmentId={environmentId}
-                    reference={reference}
-                    detail={detail}
-                    allowed={canLabel}
-                    disabledReason={
-                      blocked ?? gt("Changing labels needs triage access on this tracker.")
-                    }
-                  />
-                ) : null}
-              </span>
-            </PullRequestMetaRow>
+                  ) : null}
+                </span>
+              </PullRequestMetaRow>
+            ) : null}
             <PullRequestMetaRow icon={<UsersIcon className="size-3.5" />} label={gt("Assignees")}>
               <span className="flex min-w-0 flex-wrap items-center gap-1.5">
                 {detail.assignees.length === 0 ? (
@@ -795,6 +808,22 @@ export function IssueDetailPanel({
                 ) : null}
               </span>
             </PullRequestMetaRow>
+            {detail.fields?.map((field) => (
+              <PullRequestMetaRow key={field.name} icon={null} label={field.name}>
+                {field.url === undefined ? (
+                  field.value
+                ) : (
+                  <a
+                    href={field.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="hover:underline"
+                  >
+                    {field.value}
+                  </a>
+                )}
+              </PullRequestMetaRow>
+            ))}
           </div>
         </div>
 
@@ -846,6 +875,21 @@ export function IssueDetailPanel({
           </div>
         </PullRequestSection>
 
+        {detail.sections?.map((section) => (
+          <PullRequestSection
+            key={`section:${section.title}:${detail.url}`}
+            title={section.title}
+            keepMounted
+          >
+            <PullRequestMarkdown
+              text={section.body}
+              cwd={cwd}
+              environmentId={environmentId}
+              threadRef={threadRef}
+            />
+          </PullRequestSection>
+        ))}
+
         {detail.linkedPullRequests.length > 0 ? (
           <PullRequestSection key={`linked:${detail.url}`} title={gt("Linked pull requests")}>
             <div className="flex flex-col gap-1">
@@ -871,93 +915,102 @@ export function IssueDetailPanel({
           </PullRequestSection>
         ) : null}
 
-        <PullRequestSection
-          key={`activity:${detail.url}`}
-          title={
-            detail.commentCount > 0
-              ? gt("Activity ({count})", { count: detail.commentCount })
-              : gt("Activity")
-          }
-        >
-          <div className="flex flex-col gap-3">
-            {nextCursor !== null ? (
-              <Button
-                size="sm"
-                variant="outline"
-                className="self-start"
-                disabled={!canLoadOlder}
-                onClick={() => void loadOlder()}
-              >
-                {loadingOlder ? <T>Loading…</T> : <T>Load older comments</T>}
-              </Button>
-            ) : null}
-            {timeline.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                <T>Nothing has happened here yet.</T>
-              </p>
-            ) : null}
-            {timeline.map((item) =>
-              item.kind === "comment" ? (
-                <article
-                  key={`c:${item.comment.id}`}
-                  className="flex flex-col gap-2 rounded-lg border border-border/60 p-3"
+        {/* A tracker with neither comments nor events has no activity to be empty of. */}
+        {detail.capabilities.comment || detail.capabilities.events || timeline.length > 0 ? (
+          <PullRequestSection
+            key={`activity:${detail.url}`}
+            title={
+              detail.commentCount > 0
+                ? gt("Activity ({count})", { count: detail.commentCount })
+                : gt("Activity")
+            }
+          >
+            <div className="flex flex-col gap-3">
+              {nextCursor !== null ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="self-start"
+                  disabled={!canLoadOlder}
+                  onClick={() => void loadOlder()}
                 >
-                  <h3>
-                    <PullRequestMetaLine className="text-xs text-muted-foreground">
-                      <PullRequestActorLabel actor={item.comment.author} />
-                      {item.comment.url ? (
-                        <InlineButton
-                          tone="muted"
-                          render={
-                            <a href={item.comment.url} target="_blank" rel="noopener noreferrer" />
-                          }
-                          onClick={(event) => {
-                            event.preventDefault();
-                            void openLink(item.comment.url!, { event }).catch(console.error);
-                          }}
-                        >
-                          {formatRelativeTimeLabel(item.comment.createdAt, undefined, messages)}
-                        </InlineButton>
-                      ) : (
-                        <span>
-                          {formatRelativeTimeLabel(item.comment.createdAt, undefined, messages)}
-                        </span>
-                      )}
-                    </PullRequestMetaLine>
-                  </h3>
-                  <PullRequestCommentBody
-                    text={item.comment.body}
-                    cwd={cwd}
-                    environmentId={environmentId}
-                    threadRef={threadRef}
-                  />
-                  {item.comment.reactions !== undefined ? (
-                    <IssueReactionBar
-                      reactions={item.comment.reactions}
-                      canReact={canReact}
-                      subjectId={item.comment.id}
+                  {loadingOlder ? <T>Loading…</T> : <T>Load older comments</T>}
+                </Button>
+              ) : null}
+              {timeline.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  <T>Nothing has happened here yet.</T>
+                </p>
+              ) : null}
+              {timeline.map((item) =>
+                item.kind === "comment" ? (
+                  <article
+                    key={`c:${item.comment.id}`}
+                    className="flex flex-col gap-2 rounded-lg border border-border/60 p-3"
+                  >
+                    <h3>
+                      <PullRequestMetaLine className="text-xs text-muted-foreground">
+                        <PullRequestActorLabel actor={item.comment.author} />
+                        {item.comment.url ? (
+                          <InlineButton
+                            tone="muted"
+                            render={
+                              <a
+                                href={item.comment.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              />
+                            }
+                            onClick={(event) => {
+                              event.preventDefault();
+                              void openLink(item.comment.url!, { event }).catch(console.error);
+                            }}
+                          >
+                            {formatRelativeTimeLabel(item.comment.createdAt, undefined, messages)}
+                          </InlineButton>
+                        ) : (
+                          <span>
+                            {formatRelativeTimeLabel(item.comment.createdAt, undefined, messages)}
+                          </span>
+                        )}
+                      </PullRequestMetaLine>
+                    </h3>
+                    <PullRequestCommentBody
+                      text={item.comment.body}
+                      cwd={cwd}
                       environmentId={environmentId}
-                      reference={reference}
+                      threadRef={threadRef}
                     />
-                  ) : null}
-                </article>
-              ) : (
-                <PullRequestMetaLine
-                  key={`e:${item.event.id}`}
-                  className="px-1 text-xs text-muted-foreground"
-                >
-                  <PullRequestActorLabel actor={item.event.actor} />
-                  <IssueEventText
-                    event={item.event}
-                    sentence={issueEventSentence(item.event, messages)}
-                    onOpen={openEventSource}
-                  />
-                  <span>{formatRelativeTimeLabel(item.event.createdAt, undefined, messages)}</span>
-                </PullRequestMetaLine>
-              ),
-            )}
-          </div>
-        </PullRequestSection>
+                    {item.comment.reactions !== undefined ? (
+                      <IssueReactionBar
+                        reactions={item.comment.reactions}
+                        canReact={canReact}
+                        subjectId={item.comment.id}
+                        environmentId={environmentId}
+                        reference={reference}
+                      />
+                    ) : null}
+                  </article>
+                ) : (
+                  <PullRequestMetaLine
+                    key={`e:${item.event.id}`}
+                    className="px-1 text-xs text-muted-foreground"
+                  >
+                    <PullRequestActorLabel actor={item.event.actor} />
+                    <IssueEventText
+                      event={item.event}
+                      sentence={issueEventSentence(item.event, messages)}
+                      onOpen={openEventSource}
+                    />
+                    <span>
+                      {formatRelativeTimeLabel(item.event.createdAt, undefined, messages)}
+                    </span>
+                  </PullRequestMetaLine>
+                ),
+              )}
+            </div>
+          </PullRequestSection>
+        ) : null}
       </div>
 
       {detail.capabilities.comment ? (
