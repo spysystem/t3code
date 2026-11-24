@@ -1009,4 +1009,53 @@ describe("IssueService with a standalone tracker", () => {
       ]);
     }),
   );
+
+  it.effect("serves a tracker with an environment scope to every project, unbound", () =>
+    Effect.gen(function* () {
+      const TASKS = IssueTrackerKind.make("tasks");
+      const taskUrl = "https://tasks.example.test/?id=7";
+      const listed: string[] = [];
+      const tasks: StandaloneIssueTrackerApi = {
+        ...fakeStandaloneTracker({
+          listIssues: (input) =>
+            Effect.sync(() => {
+              listed.push(input.scope);
+              return { items: [], nextCursor: null };
+            }),
+          getIssue: (input) => Effect.succeed({ ...issue(input.key), url: taskUrl }),
+        }),
+        kind: TASKS,
+        standalone: {
+          tracker: TASKS,
+          displayName: "Tasks",
+          host: "tasks.example.test",
+          scopeNoun: "task list",
+          environmentScope: "all",
+          credential: { label: "Token", helpUrl: null },
+        },
+        parseIssueUrl: (url) =>
+          url.href === taskUrl
+            ? { host: "tasks.example.test", workspace: "tasks", scope: "all", key: "7" }
+            : null,
+      };
+      const service = yield* makeService({
+        projects: [project({ id: "web", repository: "acme/web" }), project({ id: "notes" })],
+        trackers: [fakeTracker(), tasks],
+      });
+
+      const ref = { projectId: "notes" as ProjectId, tracker: TASKS, scope: "all", key: "7" };
+      expect(yield* service.detail(ref)).toMatchObject({ host: "tasks.example.test", key: "7" });
+      expect(yield* service.resolveUrl(taskUrl, "notes" as ProjectId)).toMatchObject(ref);
+
+      // It is reached by reference only: listings and a bare key stay with the project's own.
+      const listing = yield* service.list({ state: "open" });
+      expect(listed).toEqual([]);
+      expect(listing.trackers.map((tracker) => tracker.tracker)).toEqual(["github"]);
+      expect(yield* service.projectScope("web" as ProjectId)).toMatchObject({ tracker: "github" });
+      expect(yield* Effect.flip(service.projectScope("notes" as ProjectId))).toMatchObject({
+        _tag: "IssueUnavailableError",
+        reason: "tracker-unsupported",
+      });
+    }),
+  );
 });

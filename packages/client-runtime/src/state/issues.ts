@@ -57,10 +57,10 @@ export function mergeIssueListPage(
 }
 
 /** Older comments go in front: the detail carries the newest page and pages walk backwards. */
-function prependIssueComments(
-  current: ReadonlyArray<IssueComment>,
-  older: ReadonlyArray<IssueComment>,
-): ReadonlyArray<IssueComment> {
+function prependIssueComments<Entry extends Pick<IssueComment, "id">>(
+  current: ReadonlyArray<Entry>,
+  older: ReadonlyArray<Entry>,
+): ReadonlyArray<Entry> {
   if (older.length === 0) return current;
   const seen = new Set(current.map((comment) => comment.id));
   return [...older.filter((comment) => !seen.has(comment.id)), ...current];
@@ -97,6 +97,8 @@ export function createIssueCommentPager<E>(
     const { comments, older, nextCursor, loadingOlder, unavailable } = get(page);
     return {
       comments: prependIssueComments(comments, older?.comments ?? []),
+      /** The events older pages carried; the detail holds the ones of its own page. */
+      olderEvents: older?.events ?? [],
       nextCursor,
       loadingOlder,
       canLoadOlder: nextCursor !== null && !unavailable,
@@ -144,6 +146,7 @@ export function createIssueCommentPager<E>(
           older: {
             seed,
             comments: prependIssueComments(older?.comments ?? [], result.value.comments),
+            events: prependIssueComments(older?.events ?? [], result.value.events ?? []),
             nextCursor: result.value.nextCursor,
           },
         });

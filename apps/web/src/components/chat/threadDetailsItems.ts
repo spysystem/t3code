@@ -14,6 +14,11 @@ export const THREAD_DETAILS_ITEMS = [
     defaultVisible: true,
   },
   {
+    id: "tasks",
+    label: msg("Tasks", { $context: "thread details item: linked SPY Admin tasks" }),
+    defaultVisible: true,
+  },
+  {
     id: "servers",
     label: msg("Servers", { $context: "thread details item: running dev servers" }),
     defaultVisible: true,
