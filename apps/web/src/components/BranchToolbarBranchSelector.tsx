@@ -3,6 +3,7 @@ import { contextMenuSourceOf } from "../contextMenuSource";
 import { ComposerContextLabel } from "./ComposerContextLabel";
 import { useRightPanelStore } from "../rightPanelStore";
 import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime/environment";
+import { SPY_ADMIN_TRACKER } from "@t3tools/shared/spyAdminTasks";
 import {
   isAtomCommandInterrupted,
   squashAtomCommandFailure,
@@ -738,7 +739,10 @@ export function BranchToolbarBranchSelector({
     branchStatusQuery.data?.sourceControlProvider,
   );
   const openPrLink = useOpenPrLink(threadRef);
-  const linkedIssues = serverThread?.issues ?? [];
+  // SPY Admin tasks have their own section of the card.
+  const linkedIssues = (serverThread?.issues ?? []).filter(
+    (link) => link.tracker !== SPY_ADMIN_TRACKER,
+  );
 
   function selectPickerItem(itemValue: string) {
     if (itemValue === checkoutPullRequestItemValue && prReference && onCheckoutPullRequestRequest) {

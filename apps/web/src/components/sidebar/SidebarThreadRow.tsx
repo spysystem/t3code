@@ -74,6 +74,7 @@ import { msg, T, useGT, useMessages, Var } from "gt-react";
 
 import type { MessageResolver } from "../../i18n/messages";
 
+import { SPY_ADMIN_TRACKER } from "@t3tools/shared/spyAdminTasks";
 import { useRightPanelStore } from "../../rightPanelStore";
 import { useOpenPrLink } from "../../lib/openPullRequestLink";
 import { useUiStateStore } from "../../uiStateStore";
@@ -1192,7 +1193,11 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
           onPointerDown={(event) => event.stopPropagation()}
           onClick={(event) => {
             event.stopPropagation();
-            openLinkedItems();
+            // A thread's one SPY Admin task opens itself, as its pull request does.
+            if (issueCount !== 1 || firstIssue.tracker !== SPY_ADMIN_TRACKER)
+              return openLinkedItems();
+            useRightPanelStore.getState().openIssue(threadRef, firstIssue);
+            if (!props.isRouteThread) onThreadActivate(threadRef);
           }}
         />
       }

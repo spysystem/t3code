@@ -443,6 +443,23 @@ work on with the `link_issue` tool.
 
 Writing to a tracker over a remote connection requires the `source-control:write` scope.
 
+### SPY Admin tasks
+
+Under Settings → Source control & issues, enter Admin's address in **SPY Admin address** (for
+example `admin.example.com`) and restart T3 Code. SPY Admin then appears in the same list: save
+a personal access token there once, and every project in the environment can link tasks with no
+project binding. A later change of address also needs a restart, and links made under the old
+one stop loading.
+
+A thread's tasks show under **Tasks** in the thread details card: status, assignee, developer,
+customer and target release, with the rest under **Show details**. Select the title to read the
+description and technical description beside the thread, or the number to open the task in
+Admin. **Activity** there holds the task's comments and test results, with a comment's files as
+links, and its status and assignee changes; other changes, such as a new developer or release,
+and phone calls are not shown. It stays empty on an Admin too old to share activity. **Link task** adds one by number or link after checking it exists, and the unlink button
+removes it. Agents link a task with `link_issue` and the task's Admin URL; a bare number still
+means the project's own tracker. Tasks are read-only here.
+
 ## GitHub stacks
 
 The Pull requests page shows each PR's position in its GitHub stack. Open the stack badge in a

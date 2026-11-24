@@ -79,6 +79,8 @@ interface ProjectTrackerBinding {
   readonly scope: string;
   /** The standalone tracker account the scope is read with; null for git hosts and first accounts. */
   readonly accountId: IssueTrackerAccountId | null;
+  /** Read by every project without a binding, and so left out of listings. */
+  readonly environmentWide?: boolean;
 }
 
 /** A project the registry has a tracker for, ready to serve reads and writes. */
@@ -225,6 +227,21 @@ const make = Effect.gen(function* () {
     }));
   };
 
+  // Reached by reference or URL only: a bare issue number keeps meaning the project's own tracker.
+  const environmentWide = registry.standalone.flatMap((api): ReadonlyArray<ProjectTrackerBinding> =>
+    api.standalone.environmentScope === undefined
+      ? []
+      : [
+          {
+            tracker: api.kind,
+            host: api.standalone.host,
+            scope: api.standalone.environmentScope,
+            accountId: null,
+            environmentWide: true,
+          },
+        ],
+  );
+
   /**
    * Where a project's issues live: its bound standalone tracker, its git host's, or both. The
    * tracker bound in Settings leads, as the one the user chose for the project.
@@ -239,7 +256,7 @@ const make = Effect.gen(function* () {
     ).pipe(
       Effect.map((repositoryIdentity) => {
         const gitHost = resolveGitHostBindings({ ...project, repositoryIdentity });
-        return [...resolveStandaloneBindings(binding), ...gitHost];
+        return [...resolveStandaloneBindings(binding), ...gitHost, ...environmentWide];
       }),
     );
 
@@ -358,10 +375,11 @@ const make = Effect.gen(function* () {
   const list: IssueService["Service"]["list"] = Effect.fn("IssueService.list")(function* (input) {
     // Trackers name every host so a client narrowed to one can switch to another; only the
     // narrowed host's scopes are read.
-    const { supported, unimplemented } = yield* listProjects({
+    const { supported: served, unimplemented } = yield* listProjects({
       projectId: input.projectId,
       excludeProjectIds: input.excludeProjectIds,
     });
+    const supported = served.filter((project) => !project.environmentWide);
     const host = input.host?.trim().toLowerCase();
     const limit = input.limit ?? DEFAULT_LIST_LIMIT;
     // Worktrees of one repository are separate projects, and every repository of an Azure
@@ -741,7 +759,8 @@ const make = Effect.gen(function* () {
   const projectScope: IssueService["Service"]["projectScope"] = Effect.fn(
     "IssueService.projectScope",
   )(function* (projectId, select) {
-    const { supported } = yield* listProjects({ projectId });
+    const { supported: served } = yield* listProjects({ projectId });
+    const supported = served.filter((project) => !project.environmentWide);
     if (supported.length === 0) {
       return yield* new IssueUnavailableError({ reason: "tracker-unsupported" });
     }

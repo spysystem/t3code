@@ -307,6 +307,10 @@
       "types": "./src/devSupportTicket.ts",
       "import": "./src/devSupportTicket.ts"
     },
+    "./spyAdminTasks": {
+      "types": "./src/spyAdminTasks.ts",
+      "import": "./src/spyAdminTasks.ts"
+    },
     "./composerTrigger": {
       "types": "./src/composerTrigger.ts",
       "import": "./src/composerTrigger.ts"

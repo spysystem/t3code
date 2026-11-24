@@ -114,6 +114,36 @@ describe("createIssueCommentPager", () => {
     }
   });
 
+  it("keeps the events older pages carried, older pages in front", async () => {
+    const detail = Atom.make(
+      AsyncResult.success({ comments: [comment("newest")], commentsCursor: "first-page" }),
+    );
+    const pager = createIssueCommentPager(detail);
+    const registry = AtomRegistry.make();
+    const unmount = registry.mount(pager.view);
+    const moved = (id: string) => ({
+      id,
+      kind: "state-changed" as const,
+      actor: null,
+      createdAt: "2026-07-01T00:00:00.000Z",
+      detail: "In review",
+    });
+    const pages: ReadonlyArray<IssueCommentsPage> = [
+      { comments: [], events: [moved("second")], nextCursor: "second-page" },
+      // A tracker whose events all come with the detail sends none here.
+      { comments: [comment("older")], nextCursor: "third-page" },
+      { comments: [], events: [moved("first"), moved("second")], nextCursor: null },
+    ];
+    try {
+      for (const page of pages)
+        await pager.loadOlder(registry, async () => AsyncResult.success(page));
+      expect(registry.get(pager.view).olderEvents.map(({ id }) => id)).toEqual(["first", "second"]);
+    } finally {
+      unmount();
+      registry.dispose();
+    }
+  });
+
   it("drops older pages once a refresh lands, including one still loading, and pauses paging until it ends", async () => {
     // The refreshed detail hands back the same cursor, so only the refresh itself can tell pages apart.
     const detail = Atom.make(

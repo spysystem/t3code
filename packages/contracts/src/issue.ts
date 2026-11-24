@@ -231,6 +231,28 @@ export const IssueViewerPermissions = Schema.Struct({
 });
 export type IssueViewerPermissions = typeof IssueViewerPermissions.Type;
 
+/**
+ * Something a tracker says about an issue that the common shape has no place for: its developer,
+ * its customer, its release. Named and ordered by the tracker, and shown as given.
+ */
+export const IssueField = Schema.Struct({
+  name: TrimmedNonEmptyString,
+  value: TrimmedNonEmptyString,
+  /** Where the value leads, when it names something with a page of its own. */
+  url: Schema.optional(TrimmedNonEmptyString),
+  /** Worth showing before anyone asks for the rest. */
+  primary: Schema.optional(Schema.Boolean),
+});
+export type IssueField = typeof IssueField.Type;
+
+/** Text a tracker keeps beside the description under a heading of its own, such as technical notes. */
+export const IssueSection = Schema.Struct({
+  title: TrimmedNonEmptyString,
+  /** Markdown, as `IssueDetail.body` is. */
+  body: Schema.String,
+});
+export type IssueSection = typeof IssueSection.Type;
+
 export const IssueDetail = Schema.Struct({
   ...IssueSummary.fields,
   projectId: ProjectId,
@@ -253,6 +275,10 @@ export const IssueDetail = Schema.Struct({
   commentsCursor: Schema.NullOr(TrimmedNonEmptyString),
   events: Schema.Array(IssueEvent),
   linkedPullRequests: Schema.Array(IssueLinkedPullRequest),
+  /** Absent from a tracker that fits the common shape. */
+  fields: Schema.optional(Schema.Array(IssueField)),
+  /** Absent from a tracker whose description is all the prose an issue has. */
+  sections: Schema.optional(Schema.Array(IssueSection)),
 });
 export type IssueDetail = typeof IssueDetail.Type;
 
@@ -265,6 +291,8 @@ export type IssueCommentsPageInput = typeof IssueCommentsPageInput.Type;
 
 export const IssueCommentsPage = Schema.Struct({
   comments: Schema.Array(IssueComment),
+  /** What else happened in the page's span, from a tracker whose events page with its comments. */
+  events: Schema.optional(Schema.Array(IssueEvent)),
   nextCursor: Schema.NullOr(TrimmedNonEmptyString),
 });
 export type IssueCommentsPage = typeof IssueCommentsPage.Type;
@@ -583,6 +611,11 @@ export const StandaloneIssueTrackerDescriptor = Schema.Struct({
   host: TrimmedNonEmptyString,
   /** What the tracker calls its container, in the singular: "team" on Linear, "project" on Jira. */
   scopeNoun: TrimmedNonEmptyString,
+  /**
+   * The one scope every project reads once the tracker is connected, for a tracker whose issues
+   * belong to no project. No project binds it, and the issues page leaves it out.
+   */
+  environmentScope: Schema.optional(TrimmedNonEmptyString),
   credential: Schema.Struct({
     /** What the tracker calls the credential: "Personal API key", "API token". */
     label: TrimmedNonEmptyString,

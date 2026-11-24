@@ -12,6 +12,8 @@ import type {
   IssueCommentsPage,
   IssueCreateResult,
   IssueEvent,
+  IssueField,
+  IssueSection,
   IssueInvolvement,
   IssueListSort,
   IssueLinkedPullRequest,
@@ -93,6 +95,8 @@ export interface TrackerIssueDetail extends TrackerIssueSummary {
   readonly commentsCursor: string | null;
   readonly events: ReadonlyArray<IssueEvent>;
   readonly linkedPullRequests: ReadonlyArray<IssueLinkedPullRequest>;
+  readonly fields?: ReadonlyArray<IssueField> | undefined;
+  readonly sections?: ReadonlyArray<IssueSection> | undefined;
 }
 
 /**

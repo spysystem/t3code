@@ -114,6 +114,10 @@ export function issueTrackerSummary(
     );
   if (tracker.account === null)
     return tracker.detail ?? resolve(msg("The saved credential was rejected."));
+  if (tracker.environmentScope !== undefined)
+    return resolve(
+      msg("Connected as {account} · available in every project.", { account: tracker.account }),
+    );
   const linked = Object.values(bindings).filter((binding) =>
     issueTrackerBindingIsFor(binding, tracker),
   ).length;

@@ -5674,5 +5674,6 @@
   "201490988858b511": "{by}에서 철회함",
   "50409c456e7ebe55": "Open {name} {match}",
   "e0fcb9eb90aa21b2": "Unable to open link",
-  "067aed7fd2680fe1": "The thread link could not be opened."
+  "067aed7fd2680fe1": "The thread link could not be opened.",
+  "a10360c6a2b190e3": "Connected as {account} · available in every project."
 }
